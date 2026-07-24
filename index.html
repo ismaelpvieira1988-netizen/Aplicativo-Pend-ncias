@@ -7,6 +7,34 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<!-- Firebase App & Serviços (Nuvem em Tempo Real) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
+
+  // SUAS CREDENCIAIS DO FIREBASE
+  const firebaseConfig = {
+  apiKey: "AIzaSyBfnhVR0ZOCNHtbH0ZVsFV6ju0-o_u3n6A",
+  authDomain: "pendencias-8ee99.firebaseapp.com",
+  projectId: "pendencias-8ee99",
+  storageBucket: "pendencias-8ee99.firebasestorage.app",
+  messagingSenderId: "797220136303",
+  appId: "1:797220136303:web:200542ceeb800aebd1f49a",
+  measurementId: "G-9NZNXM8P75"
+};
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+
+  // Expõe os módulos globalmente para o script do painel
+  window.db = db;
+  window.storageFB = storage;
+  window.fbMethods = { addDoc, doc, updateDoc, collection, onSnapshot, query, orderBy, ref, uploadString, getDownloadURL };
+</script>
+
 <style>
 :root{
   --bg:#14171a;
@@ -303,7 +331,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
         <option value="3°turno">3°turno</option>
       </select>
     </div>
-    <div class="sync-pill"><span class="dot pulse" id="syncDot"></span><span id="syncLabel">sincronizado agora</span></div>
+    <div class="sync-pill"><span class="dot pulse" id="syncDot"></span><span id="syncLabel">Conectando nuvem...</span></div>
     <div class="clock mono" id="clock">--:--:--</div>
   </div>
 </header>
@@ -394,7 +422,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   </div>
 </div>
 
-<p class="foot-note">Os dados desta central são compartilhados entre todos os usuários deste aplicativo — qualquer pessoa com acesso a ele visualiza as solicitações, imagens e relatórios gerados aqui. Envio por e-mail/WhatsApp abre o app correspondente para você anexar o arquivo baixado, já que navegadores não permitem anexar automaticamente por questões de segurança.</p>
+<p class="foot-note">Os dados desta central são sincronizados em nuvem entre todos os turnos em tempo real. O envio por e-mail/WhatsApp faz o download do relatório PPT para que você possa anexá-lo diretamente no app correspondente.</p>
 
 <!-- Modal: detalhes / imagem depois -->
 <div class="overlay" id="detailOverlay">
@@ -435,6 +463,7 @@ const STATUS_LABEL = {pendente:'Pendente', andamento:'Em andamento', concluida:'
 function uid(){ return 'OS-' + Date.now().toString(36).toUpperCase() + '-' + Math.floor(Math.random()*900+100); }
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function timeAgo(iso){
+  if(!iso) return '';
   const diff = (Date.now() - new Date(iso).getTime())/1000;
   if(diff < 60) return 'agora';
   if(diff < 3600) return Math.floor(diff/60)+'min atrás';
@@ -442,6 +471,7 @@ function timeAgo(iso){
   return Math.floor(diff/86400)+'d atrás';
 }
 function fmtDateTime(iso){
+  if(!iso) return '';
   const d = new Date(iso);
   return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
 }
@@ -478,28 +508,94 @@ function compressImage(file, maxW=900, quality=0.72){
   });
 }
 
-/* ==================== STATE ==================== */
-let INDEX = [];          // lightweight summaries, shared
-let lastIndexRaw = null; // to diff for toast notifications
-let currentBeforeImage = null;
-let syncing = false;
+/* Converte imagem para Base64 caso precise em relatórios offline */
+async function urlToBase64(url) {
+  if (!url) return null;
+  if (url.startsWith('data:image')) return url;
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch(e) {
+    console.error("Erro ao converter URL da foto:", e);
+    return null;
+  }
+}
 
-/* ==================== STORAGE LAYER ==================== */
-async function loadIndex(){
-  try{
-    const res = await window.storage.get('task_index', true);
-    return res && res.value ? JSON.parse(res.value) : [];
-  }catch(e){ return []; }
+/* ==================== STATE ==================== */
+let INDEX = []; 
+let currentBeforeImage = null;
+
+/* ==================== STORAGE LAYER (FIREBASE REALTIME) ==================== */
+
+async function uploadImageToCloud(base64Data, filename) {
+  if (!base64Data) return null;
+  const { ref, uploadString, getDownloadURL } = window.fbMethods;
+  const storageRef = ref(window.storageFB, `manutencao/${Date.now()}_${filename}.jpg`);
+  await uploadString(storageRef, base64Data, 'data_url');
+  return await getDownloadURL(storageRef);
 }
-async function saveIndex(list){
-  await window.storage.set('task_index', JSON.stringify(list), true);
+
+async function saveTaskToCloud(taskData) {
+  const { collection, addDoc } = window.fbMethods;
+  
+  let beforeUrl = null;
+  if (taskData.beforeImage) {
+    beforeUrl = await uploadImageToCloud(taskData.beforeImage, 'before');
+  }
+
+  const payload = {
+    ...taskData,
+    beforeImage: beforeUrl,
+    createdAt: new Date().toISOString()
+  };
+
+  await addDoc(collection(window.db, "solicitacoes"), payload);
 }
-async function loadTask(id){
-  const res = await window.storage.get('task:'+id, true);
-  return res && res.value ? JSON.parse(res.value) : null;
+
+async function updateTaskInCloud(docId, updatePayload) {
+  const { doc, updateDoc } = window.fbMethods;
+  
+  if (updatePayload.afterImage && updatePayload.afterImage.startsWith('data:image')) {
+    updatePayload.afterImage = await uploadImageToCloud(updatePayload.afterImage, 'after');
+  }
+
+  const taskRef = doc(window.db, "solicitacoes", docId);
+  await updateDoc(taskRef, updatePayload);
 }
-async function saveTask(task){
-  await window.storage.set('task:'+task.id, JSON.stringify(task), true);
+
+function listenToLiveUpdates() {
+  const { collection, query, orderBy, onSnapshot } = window.fbMethods;
+  const q = query(collection(window.db, "solicitacoes"), orderBy("createdAt", "desc"));
+
+  onSnapshot(q, (snapshot) => {
+    const updatedList = [];
+    snapshot.forEach((docSnap) => {
+      updatedList.push({ docId: docSnap.id, ...docSnap.data() });
+    });
+
+    if (INDEX.length > 0 && updatedList.length > INDEX.length) {
+      const latest = updatedList[0];
+      if (latest.requestedBy !== $('#fRequester').value) {
+        showToast('Nova solicitação', `"${latest.title}" — Turno ${latest.turnoDestino}`);
+      }
+    }
+
+    INDEX = updatedList;
+    renderBoard();
+    updateStats();
+    $('#syncDot').style.background = 'var(--green)';
+    $('#syncLabel').textContent = 'sincronizado em tempo real';
+  }, (error) => {
+    $('#syncDot').style.background = 'var(--red)';
+    $('#syncLabel').textContent = 'falha na conexão nuvem';
+    console.error("Erro na sincronização:", error);
+  });
 }
 
 /* ==================== RENDER ==================== */
@@ -552,8 +648,11 @@ function renderBoard(){
 
 function taskCardHtml(t){
   const statusClass = t.status === 'pendente' ? 'pendente' : t.status === 'andamento' ? 'andamento' : 'concluida';
+  const hasBefore = !!t.beforeImage;
+  const hasAfter = !!t.afterImage;
+
   return `
-  <div class="task" data-priority="${t.priority}" data-id="${t.id}">
+  <div class="task" data-priority="${t.priority}" data-id="${t.docId}">
     <span class="task-hole"></span>
     <div class="task-top">
       <div>
@@ -572,28 +671,20 @@ function taskCardHtml(t){
       <span>🕒 ${timeAgo(t.createdAt)}</span>
     </div>
     <div class="thumbs">
-      <div class="thumb ${t.hasBefore?'':'empty'}" data-view="before" data-id="${t.id}">${t.hasBefore ? '<span>Antes</span>' : 'Sem foto do antes'}</div>
-      <div class="thumb ${t.hasAfter?'':'empty'}" data-view="after" data-id="${t.id}">${t.hasAfter ? '<span>Depois</span>' : 'Sem foto do depois'}</div>
+      <div class="thumb ${hasBefore?'':'empty'}" data-view="before" data-id="${t.docId}">
+        ${hasBefore ? `<img src="${t.beforeImage}"><span>Antes</span>` : 'Sem foto do antes'}
+      </div>
+      <div class="thumb ${hasAfter?'':'empty'}" data-view="after" data-id="${t.docId}">
+        ${hasAfter ? `<img src="${t.afterImage}"><span>Depois</span>` : 'Sem foto do depois'}
+      </div>
     </div>
     <div class="task-actions">
-      ${t.status==='pendente' ? `<button class="btn btn-small btn-outline-blue" data-action="start" data-id="${t.id}">Iniciar execução</button>` : ''}
-      ${t.status==='andamento' ? `<button class="btn btn-small btn-outline-green" data-action="complete" data-id="${t.id}">Concluir reparo</button>` : ''}
-      <button class="btn btn-small btn-ghost" data-action="detail" data-id="${t.id}">Ver detalhes</button>
-      <button class="btn btn-small btn-outline-amber" data-action="report" data-id="${t.id}">Gerar relatório PPT</button>
+      ${t.status==='pendente' ? `<button class="btn btn-small btn-outline-blue" data-action="start" data-id="${t.docId}">Iniciar execução</button>` : ''}
+      ${t.status==='andamento' ? `<button class="btn btn-small btn-outline-green" data-action="complete" data-id="${t.docId}">Concluir reparo</button>` : ''}
+      <button class="btn btn-small btn-ghost" data-action="detail" data-id="${t.docId}">Ver detalhes</button>
+      <button class="btn btn-small btn-outline-amber" data-action="report" data-id="${t.docId}">Gerar relatório PPT</button>
     </div>
   </div>`;
-}
-
-/* fill in thumbnail images lazily (index doesn't carry image data) */
-async function hydrateThumbs(){
-  for(const thumb of $$('.thumb[data-view]')){
-    const id = thumb.dataset.id;
-    const view = thumb.dataset.view;
-    const summary = INDEX.find(t=>t.id===id);
-    if(!summary) continue;
-    const has = view==='before' ? summary.hasBefore : summary.hasAfter;
-    if(!has || thumb.dataset.hydrated) continue;
-  }
 }
 
 /* ==================== FORM ==================== */
@@ -622,10 +713,9 @@ $('#beforeInput').addEventListener('change', async (e) => {
 $('#taskForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type=submit]');
-  submitBtn.disabled = true; submitBtn.textContent = 'Registrando...';
+  submitBtn.disabled = true; submitBtn.textContent = 'Enviando para nuvem...';
 
   const id = uid();
-  const now = new Date().toISOString();
   const priority = $('#priorityGrid input[name=priority]:checked').value;
 
   const fullTask = {
@@ -638,7 +728,6 @@ $('#taskForm').addEventListener('submit', async (e) => {
     turnoDestino: $('#fTurnoDestino').value,
     requestedBy: $('#fRequester').value.trim(),
     status: 'pendente',
-    createdAt: now,
     beforeImage: currentBeforeImage || null,
     afterImage: null,
     startedAt: null,
@@ -647,18 +736,8 @@ $('#taskForm').addEventListener('submit', async (e) => {
   };
 
   try{
-    await saveTask(fullTask);
-    INDEX = await loadIndex();
-    INDEX.unshift({
-      id, title: fullTask.title, location: fullTask.location, priority,
-      turnoOrigem: fullTask.turnoOrigem, turnoDestino: fullTask.turnoDestino,
-      requestedBy: fullTask.requestedBy, status: 'pendente', createdAt: now,
-      completedAt: null, hasBefore: !!fullTask.beforeImage, hasAfter: false
-    });
-    await saveIndex(INDEX);
-    lastIndexRaw = JSON.stringify(INDEX);
-    renderBoard(); updateStats();
-    showToast('Solicitação registrada', `"${fullTask.title}" enviada para o turno ${fullTask.turnoDestino}.`);
+    await saveTaskToCloud(fullTask);
+    showToast('Solicitação gravada', `"${fullTask.title}" enviada com sucesso para a nuvem.`);
     e.target.reset();
     currentBeforeImage = null;
     $('#beforePreview').style.display='none';
@@ -666,7 +745,8 @@ $('#taskForm').addEventListener('submit', async (e) => {
     $$('#priorityGrid .priority-opt').forEach(o=>o.classList.remove('active'));
     $('#priorityGrid .priority-opt[data-p=alta]').classList.add('active');
   }catch(err){
-    showToast('Erro ao salvar', 'Não foi possível registrar a solicitação. Tente novamente.');
+    showToast('Erro ao salvar', 'Não foi possível salvar na nuvem. Verifique a conexão.');
+    console.error(err);
   }finally{
     submitBtn.disabled = false; submitBtn.textContent = 'Registrar solicitação';
   }
@@ -693,60 +773,46 @@ $('#board').addEventListener('click', async (e) => {
   const thumb = e.target.closest('.thumb[data-view]');
 
   if(thumb && !thumb.classList.contains('empty')){
-    const task = await loadTask(thumb.dataset.id);
-    const src = thumb.dataset.view === 'before' ? task.beforeImage : task.afterImage;
-    if(src){
-      $('#imgTitle').textContent = (thumb.dataset.view==='before'?'Antes — ':'Depois — ') + task.title;
-      $('#imgFull').src = src;
-      $('#imgOverlay').classList.add('open');
+    const docId = thumb.dataset.id;
+    const task = INDEX.find(t => t.docId === docId);
+    if(task){
+      const src = thumb.dataset.view === 'before' ? task.beforeImage : task.afterImage;
+      if(src){
+        $('#imgTitle').textContent = (thumb.dataset.view==='before'?'Antes — ':'Depois — ') + task.title;
+        $('#imgFull').src = src;
+        $('#imgOverlay').classList.add('open');
+      }
     }
     return;
   }
 
   if(!actionBtn) return;
-  const id = actionBtn.dataset.id;
+  const docId = actionBtn.dataset.id;
   const action = actionBtn.dataset.action;
 
   if(action === 'start'){
-    await updateTaskStatus(id, 'andamento');
+    await updateTaskInCloud(docId, {
+      status: 'andamento',
+      startedAt: new Date().toISOString()
+    });
+    showToast('Iniciado', 'Reparo marcado em andamento.');
   }else if(action === 'complete'){
-    openCompleteFlow(id);
+    openCompleteFlow(docId);
   }else if(action === 'detail'){
-    openDetail(id);
+    openDetail(docId);
   }else if(action === 'report'){
     actionBtn.disabled = true; actionBtn.textContent = 'Gerando...';
     try{
-      await generateReport(id);
+      await generateReport(docId);
     }catch(err){
       showToast('Erro no relatório', 'Não foi possível gerar o PPT.');
+      console.error(err);
     }
     actionBtn.disabled = false; actionBtn.textContent = 'Gerar relatório PPT';
   }
 });
 
-async function updateTaskStatus(id, status, extra={}){
-  const task = await loadTask(id);
-  if(!task) return;
-  task.status = status;
-  if(status === 'andamento') task.startedAt = new Date().toISOString();
-  if(status === 'concluida'){
-    task.completedAt = new Date().toISOString();
-    task.completedBy = extra.completedBy || task.completedBy;
-    if(extra.afterImage) task.afterImage = extra.afterImage;
-  }
-  await saveTask(task);
-  INDEX = await loadIndex();
-  const idx = INDEX.findIndex(t=>t.id===id);
-  if(idx>-1){
-    INDEX[idx].status = status;
-    if(status==='concluida'){ INDEX[idx].completedAt = task.completedAt; INDEX[idx].hasAfter = !!task.afterImage; }
-  }
-  await saveIndex(INDEX);
-  lastIndexRaw = JSON.stringify(INDEX);
-  renderBoard(); updateStats();
-}
-
-function openCompleteFlow(id){
+function openCompleteFlow(docId){
   const overlay = $('#detailOverlay');
   $('#detailTitle').textContent = 'Concluir reparo';
   $('#detailBody').innerHTML = `
@@ -776,15 +842,24 @@ function openCompleteFlow(id){
   });
   $('#confirmComplete').addEventListener('click', async () => {
     const completedBy = $('#completeBy').value.trim() || $('#myShift').value;
-    await updateTaskStatus(id, 'concluida', {completedBy, afterImage});
+    $('#confirmComplete').disabled = true;
+    $('#confirmComplete').textContent = 'Salvando na nuvem...';
+    
+    await updateTaskInCloud(docId, {
+      status: 'concluida',
+      completedAt: new Date().toISOString(),
+      completedBy,
+      afterImage: afterImage || null
+    });
+
     $('#detailOverlay').classList.remove('open');
-    showToast('Reparo concluído', 'Status atualizado para todos os turnos.');
+    showToast('Reparo concluído', 'Status atualizado em tempo real para todos os turnos.');
   });
   overlay.classList.add('open');
 }
 
-async function openDetail(id){
-  const task = await loadTask(id);
+function openDetail(docId){
+  const task = INDEX.find(t => t.docId === docId);
   if(!task) return;
   $('#detailTitle').textContent = task.title;
   $('#detailBody').innerHTML = `
@@ -812,9 +887,9 @@ $('#sendClose').addEventListener('click', ()=>$('#sendOverlay').classList.remove
   ov.addEventListener('click', e => { if(e.target===ov) ov.classList.remove('open'); });
 });
 
-/* ==================== PPTX GENERATION (minimal OOXML builder via JSZip) ==================== */
+/* ==================== PPTX GENERATION ==================== */
 const EMU_IN = 914400;
-const SLIDE_W = 12192000, SLIDE_H = 6858000; // 13.333 x 7.5 in, widescreen
+const SLIDE_W = 12192000, SLIDE_H = 6858000; 
 
 function xmlEscape(s){
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
@@ -837,7 +912,7 @@ function shapeText(id, name, x, y, cx, cy, text, {size=1400, bold=false, color='
 }
 
 function shapePic(id, name, rId, x, y, cx, cy){
-  return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${name}"/><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${name}"/><p:cNPicPr><a:picLocks noChangeAspect="1"/></p:cNPicPr><p:nvPr/></p:nvPicPr>
   <p:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>
   <p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:ln w="6350"><a:solidFill><a:srgbClr val="343B40"/></a:solidFill></a:ln></p:spPr></p:pic>`;
 }
@@ -857,9 +932,9 @@ ${shapesXml}
 
 async function buildPptx(task){
   const zip = new JSZip();
-  const media = []; // {name, base64}
+  const media = []; 
   let slideCount = 0;
-  const slides = []; // array of {xml, imageRels: [{rId, mediaName}]}
+  const slides = [];
 
   function pushSlide(shapesXml, imageRels=[]){
     slideCount++;
@@ -891,24 +966,28 @@ Aberto em: ${fmtDateTime(task.createdAt)}${task.completedAt ? '\nConcluído em: 
   shapes += shapeText(4,'desc',600000,1250000,10900000,5000000, task.description || '(sem descrição informada)', {size:1500,color:'1A1D21',font:'Inter'});
   pushSlide(shapes);
 
+  // Download e conversão das fotos caso existam URLs
+  const beforeB64 = task.beforeImage ? await urlToBase64(task.beforeImage) : null;
+  const afterB64 = task.afterImage ? await urlToBase64(task.afterImage) : null;
+
   // --- Slide 3: antes / depois (imagens) ---
-  if(task.beforeImage || task.afterImage){
+  if(beforeB64 || afterB64){
     shapes = '';
     shapes += shapeRect(2,'faixa',0,0,SLIDE_W,900000,'14171A');
     shapes += shapeText(3,'titulo',600000,260000,10000000,500000,'REGISTRO FOTOGRÁFICO', {size:1800,bold:true,color:'FFFFFF',font:'Oswald'});
     const imageRels = [];
     const picW = 5400000, picH = 4000000, picY = 1500000;
-    if(task.beforeImage){
+    if(beforeB64){
       const name = 'image1.jpeg';
-      media.push({name, base64: task.beforeImage.split(',')[1]});
+      media.push({name, base64: beforeB64.split(',')[1]});
       imageRels.push({rId:'rId2', mediaName:name});
       shapes += shapeText(10,'lblAntes',600000,1150000,picW,300000,'ANTES', {size:1200,bold:true,color:'8B939A',font:'Oswald'});
       shapes += shapePic(4,'antes','rId2',600000,picY,picW,picH);
     }
-    if(task.afterImage){
-      const name = task.beforeImage ? 'image2.jpeg' : 'image1.jpeg';
-      const rId = task.beforeImage ? 'rId3' : 'rId2';
-      media.push({name, base64: task.afterImage.split(',')[1]});
+    if(afterB64){
+      const name = beforeB64 ? 'image2.jpeg' : 'image1.jpeg';
+      const rId = beforeB64 ? 'rId3' : 'rId2';
+      media.push({name, base64: afterB64.split(',')[1]});
       imageRels.push({rId, mediaName:name});
       const x2 = 6200000;
       shapes += shapeText(11,'lblDepois',x2,1150000,picW,300000,'DEPOIS', {size:1200,bold:true,color:'8B939A',font:'Oswald'});
@@ -1052,8 +1131,8 @@ ${slides.map((s,i)=>`<Relationship Id="rId${i+2}" Type="http://schemas.openxmlfo
 let lastReportBlob = null;
 let lastReportName = null;
 
-async function generateReport(taskId){
-  const task = await loadTask(taskId);
+async function generateReport(docId){
+  const task = INDEX.find(t => t.docId === docId);
   if(!task){ showToast('Erro', 'Solicitação não encontrada.'); return; }
   const blob = await buildPptx(task);
   lastReportBlob = blob;
@@ -1097,7 +1176,7 @@ function openSendModal(task, blob, filename){
       try{
         const file = new File([blob], filename, {type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'});
         await navigator.share({files:[file], title: 'Relatório de manutenção — ' + task.title});
-      }catch(err){ /* usuário cancelou ou não suportado */ }
+      }catch(err){ }
     };
   }
 
@@ -1123,33 +1202,6 @@ function openSendModal(task, blob, filename){
   $('#sendOverlay').classList.add('open');
 }
 
-/* ==================== SYNC / POLLING ==================== */
-async function syncNow(silent=true){
-  syncing = true;
-  $('#syncDot').style.background = 'var(--amber)';
-  try{
-    const fresh = await loadIndex();
-    const freshRaw = JSON.stringify(fresh);
-    if(lastIndexRaw !== null && freshRaw !== lastIndexRaw){
-      const oldIds = new Set((INDEX||[]).map(t=>t.id));
-      const newOnes = fresh.filter(t=>!oldIds.has(t.id));
-      newOnes.forEach(t => showToast('Nova solicitação', `"${t.title}" — turno ${t.turnoDestino} — prioridade ${PRIORITY_LABEL[t.priority]}`));
-      const oldMap = {}; (INDEX||[]).forEach(t=>oldMap[t.id]=t.status);
-      fresh.forEach(t => { if(oldMap[t.id] && oldMap[t.id] !== t.status && !newOnes.includes(t)){
-        showToast('Status atualizado', `"${t.title}" agora está ${STATUS_LABEL[t.status].toLowerCase()}`);
-      }});
-    }
-    INDEX = fresh;
-    lastIndexRaw = freshRaw;
-    renderBoard(); updateStats();
-    $('#syncLabel').textContent = 'sincronizado agora';
-  }catch(err){
-    $('#syncLabel').textContent = 'falha ao sincronizar';
-  }
-  $('#syncDot').style.background = 'var(--green)';
-  syncing = false;
-}
-
 /* ==================== CLOCK ==================== */
 function tickClock(){
   $('#clock').textContent = new Date().toLocaleTimeString('pt-BR');
@@ -1157,10 +1209,13 @@ function tickClock(){
 setInterval(tickClock, 1000); tickClock();
 
 /* ==================== INIT ==================== */
-(async function init(){
-  await syncNow();
-  lastIndexRaw = JSON.stringify(INDEX);
-  setInterval(()=>syncNow(), 4000);
+(function init(){
+  const checkFirebase = setInterval(() => {
+    if (window.db) {
+      clearInterval(checkFirebase);
+      listenToLiveUpdates(); 
+    }
+  }, 100);
 })();
 </script>
 </body>
