@@ -12,18 +12,18 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-  import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
   // SUAS CREDENCIAIS DO FIREBASE
   const firebaseConfig = {
-  apiKey: "AIzaSyBfnhVR0ZOCNHtbH0ZVsFV6ju0-o_u3n6A",
-  authDomain: "pendencias-8ee99.firebaseapp.com",
-  projectId: "pendencias-8ee99",
-  storageBucket: "pendencias-8ee99.firebasestorage.app",
-  messagingSenderId: "797220136303",
-  appId: "1:797220136303:web:200542ceeb800aebd1f49a",
-  measurementId: "G-9NZNXM8P75"
-};
+    apiKey: "AIzaSyBfnhVR0ZOCNHtbH0ZVsFV6ju0-o_u3n6A",
+    authDomain: "pendencias-8ee99.firebaseapp.com",
+    projectId: "pendencias-8ee99",
+    storageBucket: "pendencias-8ee99.firebasestorage.app",
+    messagingSenderId: "797220136303",
+    appId: "1:797220136303:web:200542ceeb800aebd1f49a",
+    measurementId: "G-9NZNXM8P75"
+  };
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
@@ -32,7 +32,7 @@
   // Expõe os módulos globalmente para o script do painel
   window.db = db;
   window.storageFB = storage;
-  window.fbMethods = { addDoc, doc, updateDoc, collection, onSnapshot, query, orderBy, ref, uploadString, getDownloadURL };
+  window.fbMethods = { addDoc, doc, updateDoc, collection, onSnapshot, query, orderBy, ref, uploadBytes, getDownloadURL };
 </script>
 
 <style>
@@ -192,7 +192,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   text-transform:uppercase; letter-spacing:.05em; display:inline-flex; align-items:center; gap:7px;
   transition:.15s;
 }
-.btn-primary{background:var(--amber); color:#191100; width:100%; justify-content:center; padding:12px;}
+.btn-primary{background:var(--amber); color:#191100; width:100%; justify-center; padding:12px;}
 .btn-primary:hover{background:#ffb845;}
 .btn-ghost{background:transparent; border:1px solid var(--border); color:var(--text-muted);}
 .btn-ghost:hover{border-color:var(--text-muted); color:var(--text);}
@@ -483,6 +483,19 @@ function showToast(title, msg){
   setTimeout(()=>{ box.style.opacity='0'; box.style.transition='opacity .3s'; setTimeout(()=>box.remove(),300); }, 6000);
 }
 
+/* Converte base64 dataURL em Blob puro (soluciona o travamento no Storage) */
+function dataURLtoBlob(dataurl) {
+  const arr = dataurl.split(',');
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while(n--){
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], {type:mime});
+}
+
 /* compress an image file to a small JPEG dataURL */
 function compressImage(file, maxW=900, quality=0.72){
   return new Promise((resolve, reject) => {
@@ -508,7 +521,7 @@ function compressImage(file, maxW=900, quality=0.72){
   });
 }
 
-/* Converte imagem para Base64 caso precise em relatórios offline */
+/* Converte imagem da URL para Base64 caso precise em relatórios */
 async function urlToBase64(url) {
   if (!url) return null;
   if (url.startsWith('data:image')) return url;
@@ -535,10 +548,16 @@ let currentBeforeImage = null;
 
 async function uploadImageToCloud(base64Data, filename) {
   if (!base64Data) return null;
-  const { ref, uploadString, getDownloadURL } = window.fbMethods;
-  const storageRef = ref(window.storageFB, `manutencao/${Date.now()}_${filename}.jpg`);
-  await uploadString(storageRef, base64Data, 'data_url');
-  return await getDownloadURL(storageRef);
+  try {
+    const { ref, uploadBytes, getDownloadURL } = window.fbMethods;
+    const blob = dataURLtoBlob(base64Data);
+    const storageRef = ref(window.storageFB, `manutencao/${Date.now()}_${filename}.jpg`);
+    await uploadBytes(storageRef, blob);
+    return await getDownloadURL(storageRef);
+  } catch(e) {
+    console.error("Erro no upload do Storage:", e);
+    throw e;
+  }
 }
 
 async function saveTaskToCloud(taskData) {
@@ -745,7 +764,7 @@ $('#taskForm').addEventListener('submit', async (e) => {
     $$('#priorityGrid .priority-opt').forEach(o=>o.classList.remove('active'));
     $('#priorityGrid .priority-opt[data-p=alta]').classList.add('active');
   }catch(err){
-    showToast('Erro ao salvar', 'Não foi possível salvar na nuvem. Verifique a conexão.');
+    showToast('Erro ao salvar', 'Não foi possível salvar na nuvem. Verifique sua conexão.');
     console.error(err);
   }finally{
     submitBtn.disabled = false; submitBtn.textContent = 'Registrar solicitação';
@@ -991,7 +1010,7 @@ Aberto em: ${fmtDateTime(task.createdAt)}${task.completedAt ? '\nConcluído em: 
       imageRels.push({rId, mediaName:name});
       const x2 = 6200000;
       shapes += shapeText(11,'lblDepois',x2,1150000,picW,300000,'DEPOIS', {size:1200,bold:true,color:'8B939A',font:'Oswald'});
-      shapes += shapePic(5,'depois',rId,x2,picY,picW,picH);
+      shapes += shapePic(5,'depois',rId,x2,picY,picH);
     }
     pushSlide(shapes, imageRels);
   }
@@ -1124,7 +1143,10 @@ ${slides.map((s,i)=>`<Relationship Id="rId${i+2}" Type="http://schemas.openxmlfo
     zip.file(`ppt/media/${m.name}`, m.base64, {base64:true});
   });
 
-  return await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.presentationml.presentation'});
+  return await zip.generateAsync({
+    type:'blob',
+    mimeType:'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  });
 }
 
 /* ==================== REPORT SEND FLOW ==================== */
