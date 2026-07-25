@@ -3,33 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Painel de Pendências · Automação VD</title>
+<title>Painel de Manutenção · Solicitações Entre Turnos</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-<!-- Firebase App & Firestore (Apenas banco de dados, sem Storage) -->
+<!-- Firebase Module -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-  // SUAS CREDENCIAIS DO FIREBASE
-  const firebaseConfig = {
-    apiKey: "AIzaSyBfnhVR0ZOCNHtbH0ZVsFV6ju0-o_u3n6A",
-    authDomain: "pendencias-8ee99.firebaseapp.com",
-    projectId: "pendencias-8ee99",
-    storageBucket: "pendencias-8ee99.firebasestorage.app",
-    messagingSenderId: "797220136303",
-    appId: "1:797220136303:web:200542ceeb800aebd1f49a",
-    measurementId: "G-9NZNXM8P75"
-  };
+  try {
+    const firebaseConfig = {
+      apiKey: "AIzaSyBfnhVR0ZOCNHtbH0ZVsFV6ju0-o_u3n6A",
+      authDomain: "pendencias-8ee99.firebaseapp.com",
+      projectId: "pendencias-8ee99",
+      storageBucket: "pendencias-8ee99.firebasestorage.app",
+      messagingSenderId: "797220136303",
+      appId: "1:797220136303:web:200542ceeb800aebd1f49a",
+      measurementId: "G-9NZNXM8P75"
+    };
 
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
 
-  // Expõe os módulos do Firestore globalmente
-  window.db = db;
-  window.fbMethods = { addDoc, doc, updateDoc, collection, onSnapshot, query, orderBy };
+    window.db = db;
+    window.fbMethods = { addDoc, doc, updateDoc, collection, onSnapshot, query, orderBy };
+    window.firebaseReady = true;
+  } catch (err) {
+    console.error("Erro na inicialização do Firebase:", err);
+    window.firebaseError = err;
+  }
 </script>
 
 <style>
@@ -76,7 +80,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--panel-3);border-radius:10px;}
 
-/* ---------- HEADER ---------- */
+/* HEADER */
 .topbar{
   position:sticky; top:0; z-index:40;
   display:flex; align-items:center; gap:18px;
@@ -112,12 +116,14 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   background:var(--panel); border:1px solid var(--border); border-radius:30px;
   padding:6px 12px; font-size:11px; color:var(--text-muted);
 }
-.dot{width:7px;height:7px;border-radius:50%;background:var(--green);}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--amber);}
+.dot.green{background:var(--green);}
+.dot.red{background:var(--red);}
 .dot.pulse{animation:pulse 1.6s infinite;}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(67,183,122,.55);}70%{box-shadow:0 0 0 7px rgba(67,183,122,0);}100%{box-shadow:0 0 0 0 rgba(67,183,122,0);}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(245,166,35,.55);}70%{box-shadow:0 0 0 7px rgba(245,166,35,0);}100%{box-shadow:0 0 0 0 rgba(245,166,35,0);}}
 .clock{font-size:12px;color:var(--text-muted);min-width:64px;text-align:right;}
 
-/* ---------- LAYOUT ---------- */
+/* LAYOUT */
 .stats-strip{
   display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
   background:var(--border); border:1px solid var(--border); margin:18px 22px 0;
@@ -137,7 +143,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 }
 @media (max-width:900px){.layout{grid-template-columns:1fr;}}
 
-/* ---------- FORM CARD ---------- */
+/* FORM CARD */
 .card{
   background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
   box-shadow:var(--shadow);
@@ -189,7 +195,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   text-transform:uppercase; letter-spacing:.05em; display:inline-flex; align-items:center; gap:7px;
   transition:.15s;
 }
-.btn-primary{background:var(--amber); color:#191100; width:100%; justify-center; padding:12px;}
+.btn-primary{background:var(--amber); color:#191100; width:100%; justify-content:center; padding:12px;}
 .btn-primary:hover{background:#ffb845;}
 .btn-ghost{background:transparent; border:1px solid var(--border); color:var(--text-muted);}
 .btn-ghost:hover{border-color:var(--text-muted); color:var(--text);}
@@ -199,7 +205,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .btn-outline-amber{border:1px solid var(--amber); color:var(--amber); background:rgba(245,166,35,.08);}
 .btn:disabled{opacity:.35; cursor:not-allowed;}
 
-/* ---------- BOARD ---------- */
+/* BOARD */
 .board-head{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px;}
 .filters{display:flex; gap:6px; flex-wrap:wrap;}
 .chip{
@@ -213,7 +219,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 }
 .empty-state b{display:block; color:var(--text-muted); font-family:'Oswald',sans-serif; font-size:16px; margin-bottom:4px; text-transform:uppercase;}
 
-/* ---------- TASK CARD ---------- */
+/* TASK CARD */
 .task{
   position:relative; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
   padding:14px 16px 14px 20px; overflow:hidden; box-shadow:var(--shadow);
@@ -246,7 +252,6 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .task-desc{font-size:12.5px; color:var(--text-muted); line-height:1.5; margin-bottom:10px;}
 .task-meta{display:flex; flex-wrap:wrap; gap:10px 16px; font-size:11px; color:var(--text-muted); margin-bottom:10px;}
 .task-meta span{display:flex; align-items:center; gap:5px;}
-.task-meta svg{width:13px;height:13px; opacity:.7;}
 .status-pill{
   font-size:10px; text-transform:uppercase; letter-spacing:.06em; padding:3px 9px; border-radius:20px; font-weight:600;
 }
@@ -260,7 +265,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .thumb.empty{display:flex; align-items:center; justify-content:center; color:var(--text-faint); font-size:10.5px; text-transform:uppercase; text-align:center; padding:6px;}
 .task-actions{display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid var(--border-soft); padding-top:10px;}
 
-/* ---------- MODAL ---------- */
+/* MODAL */
 .overlay{
   position:fixed; inset:0; background:rgba(10,11,12,.75); backdrop-filter:blur(2px);
   display:none; align-items:center; justify-content:center; z-index:100; padding:20px;
@@ -277,18 +282,20 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .modal-close:hover{color:var(--text);}
 .modal-body{padding:18px;}
 .modal-body p{font-size:12.5px; color:var(--text-muted); line-height:1.6;}
-.send-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px;}
+
+.send-grid{display:flex; flex-direction:column; gap:10px; margin-top:14px;}
 .send-btn{
-  display:flex; flex-direction:column; align-items:center; gap:8px; padding:16px 10px;
+  display:flex; align-items:center; justify-content:center; gap:10px; padding:14px 16px;
   border:1px solid var(--border); border-radius:var(--radius); background:var(--panel-2); color:var(--text);
-  font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; font-weight:600;
+  font-size:12px; text-transform:uppercase; letter-spacing:.04em; font-weight:600; text-decoration:none;
 }
 .send-btn:hover{border-color:var(--amber); background:var(--panel-3);}
-.send-btn svg{width:22px;height:22px;}
+.send-btn svg{width:20px;height:20px;}
+
 .upload-box.small{padding:10px;}
 .modal img.full{width:100%; border-radius:var(--radius); border:1px solid var(--border);}
 
-/* ---------- TOASTS ---------- */
+/* TOASTS */
 .toasts{position:fixed; bottom:18px; right:18px; z-index:200; display:flex; flex-direction:column; gap:8px; max-width:320px;}
 .toast{
   background:var(--panel-2); border:1px solid var(--border); border-left:3px solid var(--amber);
@@ -303,7 +310,6 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 @media (max-width:520px){
   .priority-grid{grid-template-columns:repeat(2,1fr);}
   .stats-strip{grid-template-columns:repeat(2,1fr);}
-  .send-grid{grid-template-columns:1fr;}
 }
 </style>
 </head>
@@ -328,7 +334,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
         <option value="3°turno">3°turno</option>
       </select>
     </div>
-    <div class="sync-pill"><span class="dot pulse" id="syncDot"></span><span id="syncLabel">Conectando nuvem...</span></div>
+    <div class="sync-pill"><span class="dot pulse" id="syncDot"></span><span id="syncLabel">Iniciando sistema...</span></div>
     <div class="clock mono" id="clock">--:--:--</div>
   </div>
 </header>
@@ -373,9 +379,9 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
         <div class="field">
           <label for="fTurnoDestino">Turno responsável pela execução</label>
           <select id="fTurnoDestino" required>
-            <option value="1°Turno">1°Turno</option>
-            <option value="2°Turno">2°Turno</option>
-            <option value="3°Turno">3°Turno</option>
+            <option value="1°turno">1°turno</option>
+            <option value="2°turno">2°turno</option>
+            <option value="3°turno">3°turno</option>
           </select>
         </div>
         <div class="field">
@@ -419,9 +425,9 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   </div>
 </div>
 
-<p class="foot-note">Os dados e fotos desta central são sincronizados diretamente via Firestore em tempo real.</p>
+<p class="foot-note">Os dados e fotos desta central são sincronizados via Firestore em tempo real.</p>
 
-<!-- Modal: detalhes / imagem depois -->
+<!-- Modal: detalhes -->
 <div class="overlay" id="detailOverlay">
   <div class="modal modal-lg">
     <div class="modal-head"><h3 id="detailTitle">Detalhes</h3><button class="modal-close" id="detailClose">&times;</button></div>
@@ -434,7 +440,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   <div class="modal">
     <div class="modal-head"><h3>Enviar relatório</h3><button class="modal-close" id="sendClose">&times;</button></div>
     <div class="modal-body">
-      <p>O relatório em PowerPoint foi gerado. Escolha como deseja salvá-lo ou compartilhá-lo:</p>
+      <p>O relatório em PowerPoint foi gerado com sucesso. Escolha como deseja acessá-lo:</p>
       <div class="send-grid" id="sendGrid"></div>
     </div>
   </div>
@@ -458,7 +464,7 @@ const PRIORITY_LABEL = {baixa:'Baixa', media:'Média', alta:'Alta', urgente:'Urg
 const STATUS_LABEL = {pendente:'Pendente', andamento:'Em andamento', concluida:'Concluída'};
 
 function uid(){ return 'OS-' + Date.now().toString(36).toUpperCase() + '-' + Math.floor(Math.random()*900+100); }
-function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }
 function timeAgo(iso){
   if(!iso) return '';
   const diff = (Date.now() - new Date(iso).getTime())/1000;
@@ -480,7 +486,6 @@ function showToast(title, msg){
   setTimeout(()=>{ box.style.opacity='0'; box.style.transition='opacity .3s'; setTimeout(()=>box.remove(),300); }, 6000);
 }
 
-/* Reduz bastante a imagem para caber de forma leve e rápida no Firestore */
 function compressImage(file, maxW=600, quality=0.6){
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -505,28 +510,25 @@ function compressImage(file, maxW=600, quality=0.6){
   });
 }
 
-/* Função genérica e compatível com celulares para acionar downloads */
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
+function triggerFileDownload(dataUrl, filename) {
   const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
   a.style.display = 'none';
+  a.href = dataUrl;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => {
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 30000); // 30s de retenção garantem download completo em celulares
+  }, 1000);
 }
 
 /* ==================== STATE ==================== */
 let INDEX = []; 
 let currentBeforeImage = null;
 
-/* ==================== BANCO DE DADOS (FIRESTORE DIRETO) ==================== */
-
+/* ==================== BANCO DE DADOS ==================== */
 async function saveTaskToCloud(taskData) {
+  if(!window.db) throw new Error("Sem conexão Firebase");
   const { collection, addDoc } = window.fbMethods;
   const payload = {
     ...taskData,
@@ -536,12 +538,14 @@ async function saveTaskToCloud(taskData) {
 }
 
 async function updateTaskInCloud(docId, updatePayload) {
+  if(!window.db) throw new Error("Sem conexão Firebase");
   const { doc, updateDoc } = window.fbMethods;
   const taskRef = doc(window.db, "solicitacoes", docId);
   await updateDoc(taskRef, updatePayload);
 }
 
 function listenToLiveUpdates() {
+  if(!window.db) return;
   const { collection, query, orderBy, onSnapshot } = window.fbMethods;
   const q = query(collection(window.db, "solicitacoes"), orderBy("createdAt", "desc"));
 
@@ -561,12 +565,13 @@ function listenToLiveUpdates() {
     INDEX = updatedList;
     renderBoard();
     updateStats();
-    $('#syncDot').style.background = 'var(--green)';
-    $('#syncLabel').textContent = 'sincronizado em tempo real';
+    $('#syncDot').className = 'dot green';
+    $('#syncLabel').textContent = 'Sincronizado em tempo real';
   }, (error) => {
-    $('#syncDot').style.background = 'var(--red)';
-    $('#syncLabel').textContent = 'falha na conexão nuvem';
+    $('#syncDot').className = 'dot red';
+    $('#syncLabel').textContent = 'Erro de permissão / nuvem';
     console.error("Erro no Firestore:", error);
+    renderBoard();
   });
 }
 
@@ -611,7 +616,7 @@ function renderBoard(){
   });
 
   if(list.length === 0){
-    board.innerHTML = `<div class="empty-state"><b>Nada por aqui</b>Nenhuma solicitação corresponde a este filtro.</div>`;
+    board.innerHTML = `<div class="empty-state"><b>Nenhuma solicitação</b>Sua lista está limpa ou não há dados para este filtro.</div>`;
     return;
   }
 
@@ -717,7 +722,7 @@ $('#taskForm').addEventListener('submit', async (e) => {
     $$('#priorityGrid .priority-opt').forEach(o=>o.classList.remove('active'));
     $('#priorityGrid .priority-opt[data-p=alta]').classList.add('active');
   }catch(err){
-    showToast('Erro ao salvar', 'Não foi possível salvar no Firestore. Verifique as Regras no Console.');
+    showToast('Erro ao salvar', 'Não foi possível salvar no banco de dados.');
     console.error(err);
   }finally{
     submitBtn.disabled = false; submitBtn.textContent = 'Registrar solicitação';
@@ -902,7 +907,7 @@ ${shapesXml}
 </p:sld>`;
 }
 
-async function buildPptx(task){
+async function buildPptxDataUrl(task){
   const zip = new JSZip();
   const media = []; 
   let slideCount = 0;
@@ -913,7 +918,7 @@ async function buildPptx(task){
     slides.push({ xml: slideXml(shapesXml), imageRels });
   }
 
-  // --- Slide 1: capa ---
+  // Capa
   let shapes = '';
   shapes += shapeRect(2,'faixa',0,0,SLIDE_W,1500000,'14171A');
   shapes += shapeRect(3,'faixaAccent',0,1500000,SLIDE_W,60000,'F5A623');
@@ -931,14 +936,14 @@ Aberto em: ${fmtDateTime(task.createdAt)}${task.completedAt ? '\nConcluído em: 
   shapes += shapeText(8,'gerado',760000,6300000,9500000,300000, 'Gerado automaticamente pelo Painel de Manutenção em ' + fmtDateTime(new Date().toISOString()), {size:900,color:'8B939A',font:'Inter'});
   pushSlide(shapes);
 
-  // --- Slide 2: descrição ---
+  // Descrição
   shapes = '';
   shapes += shapeRect(2,'faixa',0,0,SLIDE_W,900000,'14171A');
   shapes += shapeText(3,'titulo',600000,260000,10000000,500000,'DESCRIÇÃO DO PROBLEMA', {size:1800,bold:true,color:'FFFFFF',font:'Oswald'});
   shapes += shapeText(4,'desc',600000,1250000,10900000,5000000, task.description || '(sem descrição informada)', {size:1500,color:'1A1D21',font:'Inter'});
   pushSlide(shapes);
 
-  // --- Slide 3: antes / depois (imagens) ---
+  // Fotos
   if(task.beforeImage || task.afterImage){
     shapes = '';
     shapes += shapeRect(2,'faixa',0,0,SLIDE_W,900000,'14171A');
@@ -965,7 +970,6 @@ Aberto em: ${fmtDateTime(task.createdAt)}${task.completedAt ? '\nConcluído em: 
     pushSlide(shapes, imageRels);
   }
 
-  /* ---- assemble zip package ---- */
   zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -1093,62 +1097,60 @@ ${slides.map((s,i)=>`<Relationship Id="rId${i+2}" Type="http://schemas.openxmlfo
     zip.file(`ppt/media/${m.name}`, m.base64, {base64:true});
   });
 
-  return await zip.generateAsync({
-    type:'blob',
-    mimeType:'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-  });
+  const base64 = await zip.generateAsync({ type: 'base64' });
+  return 'data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,' + base64;
 }
 
 /* ==================== REPORT SEND FLOW ==================== */
-let lastReportBlob = null;
-let lastReportName = null;
-
 async function generateReport(docId){
   const task = INDEX.find(t => t.docId === docId);
   if(!task){ showToast('Erro', 'Solicitação não encontrada.'); return; }
-  const blob = await buildPptx(task);
-  lastReportBlob = blob;
-  lastReportName = `Relatorio_${task.id}.pptx`;
-  openSendModal(task, blob, lastReportName);
+  const dataUrl = await buildPptxDataUrl(task);
+  const filename = `Relatorio_${task.id}.pptx`;
+  openSendModal(task, dataUrl, filename);
 }
 
-function openSendModal(task, blob, filename){
+function openSendModal(task, dataUrl, filename){
   const grid = $('#sendGrid');
-  const canShareFiles = !!(navigator.canShare && navigator.canShare({files:[new File([blob], filename, {type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'})]}));
+  const canShareFiles = !!navigator.share;
   
   grid.innerHTML = `
     <button class="send-btn" id="btnDownload">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Baixar arquivo
+      Baixar arquivo (.pptx)
     </button>
     ${canShareFiles ? `<button class="send-btn" id="btnShare">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-      Compartilhar
+      Compartilhar Arquivo
     </button>` : ''}
-    <button class="send-btn" id="btnEmail" style="${!canShareFiles ? 'grid-column: span 1;' : ''}">
+    <button class="send-btn" id="btnEmail">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" opacity="0"/><path d="M22 6l-10 7L2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
       Enviar por e-mail
     </button>
   `;
 
   $('#btnDownload').onclick = () => {
-    downloadBlob(blob, filename);
+    triggerFileDownload(dataUrl, filename);
     showToast('Download iniciado', filename);
   };
 
   if(canShareFiles){
     $('#btnShare').onclick = async () => {
       try{
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
         const file = new File([blob], filename, {type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'});
         await navigator.share({files:[file], title: 'Relatório de manutenção — ' + task.title});
-      }catch(err){ }
+      }catch(err){ 
+        triggerFileDownload(dataUrl, filename);
+      }
     };
   }
 
   $('#btnEmail').onclick = () => {
-    downloadBlob(blob, filename);
+    triggerFileDownload(dataUrl, filename);
     const subject = encodeURIComponent('Relatório de manutenção — ' + task.title);
-    const body = encodeURIComponent(`Segue relatório referente à solicitação ${task.id} - ${task.title}.\n\nO arquivo "${filename}" foi baixado no seu dispositivo — anexe-o manualmente a este e-mail antes de enviar.`);
+    const body = encodeURIComponent(`Segue relatório referente à solicitação ${task.id} - ${task.title}.\n\nO arquivo "${filename}" foi baixado no seu dispositivo.`);
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
 
@@ -1163,12 +1165,20 @@ setInterval(tickClock, 1000); tickClock();
 
 /* ==================== INIT ==================== */
 (function init(){
+  renderBoard();
+  let attempts = 0;
   const checkFirebase = setInterval(() => {
-    if (window.db) {
+    attempts++;
+    if (window.firebaseReady && window.db) {
       clearInterval(checkFirebase);
       listenToLiveUpdates(); 
+    } else if (attempts >= 30) {
+      clearInterval(checkFirebase);
+      $('#syncDot').className = 'dot red';
+      $('#syncLabel').textContent = 'Erro ao carregar nuvem';
+      console.warn("Timeout ao conectar ao Firebase.");
     }
-  }, 100);
+  }, 200);
 })();
 </script>
 </body>
