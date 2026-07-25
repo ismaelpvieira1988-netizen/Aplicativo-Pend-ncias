@@ -419,7 +419,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   </div>
 </div>
 
-<p class="foot-note">Os dados e fotos desta central são sincronizados diretamente via Firestore em tempo real. O envio por e-mail/WhatsApp faz o download do relatório PPT para anexá-lo diretamente no app desejado.</p>
+<p class="foot-note">Os dados e fotos desta central são sincronizados diretamente via Firestore em tempo real.</p>
 
 <!-- Modal: detalhes / imagem depois -->
 <div class="overlay" id="detailOverlay">
@@ -434,7 +434,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   <div class="modal">
     <div class="modal-head"><h3>Enviar relatório</h3><button class="modal-close" id="sendClose">&times;</button></div>
     <div class="modal-body">
-      <p>O relatório em PowerPoint foi gerado. Escolha como deseja enviá-lo:</p>
+      <p>O relatório em PowerPoint foi gerado. Escolha como deseja salvá-lo ou compartilhá-lo:</p>
       <div class="send-grid" id="sendGrid"></div>
     </div>
   </div>
@@ -503,6 +503,21 @@ function compressImage(file, maxW=600, quality=0.6){
     };
     reader.readAsDataURL(file);
   });
+}
+
+/* Função genérica e compatível com celulares para acionar downloads */
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 30000); // 30s de retenção garantem download completo em celulares
 }
 
 /* ==================== STATE ==================== */
@@ -1100,6 +1115,7 @@ async function generateReport(docId){
 function openSendModal(task, blob, filename){
   const grid = $('#sendGrid');
   const canShareFiles = !!(navigator.canShare && navigator.canShare({files:[new File([blob], filename, {type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'})]}));
+  
   grid.innerHTML = `
     <button class="send-btn" id="btnDownload">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1109,22 +1125,14 @@ function openSendModal(task, blob, filename){
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
       Compartilhar
     </button>` : ''}
-    <button class="send-btn" id="btnEmail">
+    <button class="send-btn" id="btnEmail" style="${!canShareFiles ? 'grid-column: span 1;' : ''}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" opacity="0"/><path d="M22 6l-10 7L2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
       Enviar por e-mail
-    </button>
-    <button class="send-btn" id="btnWhats">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.36 7.58L3 20l1.05-5.4A8.5 8.5 0 1 1 21 11.5z"/></svg>
-      WhatsApp
     </button>
   `;
 
   $('#btnDownload').onclick = () => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    downloadBlob(blob, filename);
     showToast('Download iniciado', filename);
   };
 
@@ -1138,22 +1146,10 @@ function openSendModal(task, blob, filename){
   }
 
   $('#btnEmail').onclick = () => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    downloadBlob(blob, filename);
     const subject = encodeURIComponent('Relatório de manutenção — ' + task.title);
     const body = encodeURIComponent(`Segue relatório referente à solicitação ${task.id} - ${task.title}.\n\nO arquivo "${filename}" foi baixado no seu dispositivo — anexe-o manualmente a este e-mail antes de enviar.`);
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
-  };
-
-  $('#btnWhats').onclick = () => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url), 4000);
-    const text = encodeURIComponent(`Relatório de manutenção — ${task.title} (${task.id}). Arquivo "${filename}" baixado — anexe-o na conversa.`);
-    window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
   $('#sendOverlay').classList.add('open');
