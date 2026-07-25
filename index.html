@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-<!-- Firebase App & Firestore (Apenas banco de dados) -->
+<!-- Firebase App & Firestore -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
@@ -26,7 +26,6 @@
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  // Exposição global das variáveis e métodos do Firebase
   window.db = db;
   window.fbMethods = { addDoc, doc, updateDoc, collection, onSnapshot, query, orderBy };
 </script>
@@ -277,7 +276,6 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .modal-body{padding:18px;}
 .modal-body p{font-size:12.5px; color:var(--text-muted); line-height:1.6;}
 
-/* SEND MODAL GRID ADJUSTMENT */
 .send-grid{display:flex; flex-direction:column; gap:10px; margin-top:14px;}
 .send-btn{
   display:flex; align-items:center; justify-content:center; gap:10px; padding:14px 16px;
@@ -481,7 +479,8 @@ function showToast(title, msg){
   setTimeout(()=>{ box.style.opacity='0'; box.style.transition='opacity .3s'; setTimeout(()=>box.remove(),300); }, 6000);
 }
 
-function compressImage(file, maxW=600, quality=0.6){
+/* COMPRESSÃO DE IMAGEM OTIMIZADA PARA NUVEM E DISPOSITIVOS MÓVEIS (Evita travar o Firestore) */
+function compressImage(file, maxW=800, quality=0.5){
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Falha ao ler imagem'));
@@ -505,7 +504,6 @@ function compressImage(file, maxW=600, quality=0.6){
   });
 }
 
-/* FIX DEFINITIVO DE DOWNLOAD COMPATÍVEL COM CELULARES (ANDROID E IOS) */
 function forceDownloadBlob(blob, filename) {
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -545,7 +543,8 @@ function listenToLiveUpdates() {
   const { collection, query, orderBy, onSnapshot } = window.fbMethods;
   const q = query(collection(window.db, "solicitacoes"), orderBy("createdAt", "desc"));
 
-  onSnapshot(q, (snapshot) => {
+  /* Sincronização em tempo real otimizada para conexões mobile */
+  onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
     const updatedList = [];
     snapshot.forEach((docSnap) => {
       updatedList.push({ docId: docSnap.id, ...docSnap.data() });
@@ -1111,7 +1110,6 @@ function openSendModal(task, blob, filename){
   const grid = $('#sendGrid');
   const canShareFiles = !!(navigator.canShare && navigator.canShare({files:[new File([blob], filename, {type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'})]}));
   
-  // Renderizando opções do modal sem o botão do WhatsApp
   grid.innerHTML = `
     <button class="send-btn" id="btnDownload">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1159,10 +1157,15 @@ setInterval(tickClock, 1000); tickClock();
 
 /* ==================== INIT ==================== */
 (function init(){
+  let attempts = 0;
   const checkFirebase = setInterval(() => {
-    if (window.db) {
+    attempts++;
+    if (window.db && window.fbMethods) {
       clearInterval(checkFirebase);
       listenToLiveUpdates(); 
+    } else if (attempts > 50) {
+      clearInterval(checkFirebase);
+      console.error("Falha ao inicializar o SDK do Firebase após 5 segundos.");
     }
   }, 100);
 })();
