@@ -1,507 +1,1174 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Pendências · AutomaçãoVD</title>
-    
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- FontAwesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts (Inter) -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Pendências · AutomaçãoVD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-    <style>
-        :root {
-            --bg-body: #f8fafc;
-            --card-bg: #ffffff;
-            --text-main: #1e293b;
-            --text-muted: #64748b;
-            --border-color: #e2e8f0;
-            --primary-accent: #0284c7;
-        }
+<!-- Firebase App & Firestore -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-body);
-            color: var(--text-main);
-            padding-bottom: 80px;
-        }
+  const firebaseConfig = {
+    apiKey: "AIzaSyBfnhVR0ZOCNHtbH0ZVsFV6ju0-o_u3n6A",
+    authDomain: "pendencias-8ee99.firebaseapp.com",
+    projectId: "pendencias-8ee99",
+    storageBucket: "pendencias-8ee99.firebasestorage.app",
+    messagingSenderId: "797220136303",
+    appId: "1:797220136303:web:200542ceeb800aebd1f49a",
+    measurementId: "G-9NZNXM8P75"
+  };
 
-        .navbar-custom {
-            background-color: #ffffff;
-            border-bottom: 1px solid var(--border-color);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
 
-        .filter-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 24px;
-        }
+  window.db = db;
+  window.fbMethods = { addDoc, doc, updateDoc, collection, onSnapshot, query, orderBy };
+</script>
 
-        /* KanBan / Status Columns */
-        .task-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 16px;
-            margin-bottom: 16px;
-            transition: transform 0.2s, box-shadow 0.2s;
-            position: relative;
-        }
+<style>
+:root{
+  --bg:#14171a;
+  --bg-2:#101214;
+  --panel:#1d2124;
+  --panel-2:#24292d;
+  --panel-3:#2b3136;
+  --border:#343b40;
+  --border-soft:#2a3034;
+  --text:#eceeef;
+  --text-muted:#8b939a;
+  --text-faint:#5f676e;
+  --amber:#f5a623;
+  --amber-dim:#7a591c;
+  --red:#e5484d;
+  --blue:#4a9ede;
+  --green:#43b77a;
+  --steel:#5b6570;
+  --radius:3px;
+  --shadow:0 4px 18px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:
+    radial-gradient(ellipse 1200px 600px at 15% -10%, rgba(245,166,35,.05), transparent 60%),
+    var(--bg);
+  color:var(--text);
+  font-family:'Inter',sans-serif;
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--amber);color:#161616;}
+h1,h2,h3,h4{font-family:'Oswald',sans-serif;margin:0;letter-spacing:.02em;}
+.mono{font-family:'JetBrains Mono',monospace;}
+a{color:inherit;}
+button{font-family:'Inter',sans-serif;cursor:pointer;}
+button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible{
+  outline:2px solid var(--amber); outline-offset:2px;
+}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--panel-3);border-radius:10px;}
 
-        .task-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        }
+/* ---------- HEADER ---------- */
+.topbar{
+  position:sticky; top:0; z-index:40;
+  display:flex; align-items:center; gap:18px;
+  padding:12px 22px;
+  background:linear-gradient(180deg, var(--bg-2), rgba(16,18,20,.92));
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(6px);
+  flex-wrap:wrap;
+}
+.brand{display:flex;align-items:center;gap:12px;margin-right:auto;}
+.brand-mark{
+  width:38px;height:38px;border-radius:4px;
+  background:repeating-linear-gradient(45deg, var(--amber) 0 6px, #14171a 6px 12px);
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--amber-dim);
+  flex:none;
+}
+.brand-mark svg{width:20px;height:20px;}
+.brand h1{font-size:17px; text-transform:uppercase; line-height:1.1;}
+.brand p{margin:2px 0 0; font-size:11px; color:var(--text-muted); letter-spacing:.08em; text-transform:uppercase;}
+.top-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.shift-select{
+  display:flex; align-items:center; gap:8px;
+  background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+  padding:6px 10px;
+}
+.shift-select label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;}
+.shift-select select{
+  background:transparent;border:none;color:var(--text);font-weight:600;font-size:13px;
+}
+.sync-pill{
+  display:flex;align-items:center;gap:7px;
+  background:var(--panel); border:1px solid var(--border); border-radius:30px;
+  padding:6px 12px; font-size:11px; color:var(--text-muted);
+}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);}
+.dot.pulse{animation:pulse 1.6s infinite;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(67,183,122,.55);}70%{box-shadow:0 0 0 7px rgba(67,183,122,0);}100%{box-shadow:0 0 0 0 rgba(67,183,122,0);}}
+.clock{font-size:12px;color:var(--text-muted);min-width:64px;text-align:right;}
 
-        /* Badges de Status */
-        .status-badge {
-            font-size: 0.75rem;
-            font-weight: 600;
-            padding: 4px 10px;
-            border-radius: 20px;
-            text-transform: uppercase;
-        }
-        .status-pendente { background-color: #fef3c7; color: #92400e; }
-        .status-em_andamento { background-color: #e0f2fe; color: #0369a1; }
-        .status-concluido { background-color: #dcfce7; color: #15803d; }
-        .status-cancelado { background-color: #f3f4f6; color: #4b5563; }
+/* ---------- LAYOUT ---------- */
+.stats-strip{
+  display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
+  background:var(--border); border:1px solid var(--border); margin:18px 22px 0;
+  border-radius:var(--radius); overflow:hidden;
+}
+.stat{background:var(--panel); padding:12px 16px;}
+.stat b{display:block; font-family:'Oswald',sans-serif; font-size:26px;}
+.stat span{font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-muted);}
+.stat.pendente b{color:var(--steel);}
+.stat.andamento b{color:var(--blue);}
+.stat.concluida b{color:var(--green);}
+.stat.urgente b{color:var(--red);}
 
-        .img-preview-thumb {
-            width: 100%;
-            max-height: 180px;
-            object-fit: cover;
-            border-radius: 8px;
-            margin-top: 10px;
-            cursor: pointer;
-        }
+.layout{
+  display:grid; grid-template-columns:340px 1fr; gap:18px;
+  padding:18px 22px 60px; align-items:start;
+}
+@media (max-width:900px){.layout{grid-template-columns:1fr;}}
 
-        .fab-button {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background-color: var(--primary-accent);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);
-            cursor: pointer;
-            border: none;
-            z-index: 1000;
-            font-size: 1.5rem;
-        }
+/* ---------- FORM CARD ---------- */
+.card{
+  background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow);
+}
+.form-card{position:sticky; top:88px;}
+@media (max-width:900px){.form-card{position:static;}}
+.card-head{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; border-bottom:1px solid var(--border);
+}
+.card-head h2{font-size:14px; text-transform:uppercase; letter-spacing:.06em;}
+.tag-eyebrow{font-size:10px; color:var(--amber); text-transform:uppercase; letter-spacing:.12em; font-family:'JetBrains Mono',monospace;}
+.form-body{padding:16px;}
+.field{margin-bottom:13px;}
+.field label{display:block; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px;}
+.field input[type=text], .field textarea, .field select{
+  width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+  padding:9px 10px; border-radius:var(--radius); font-size:13.5px; font-family:inherit;
+}
+.field textarea{resize:vertical; min-height:64px;}
+.priority-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:6px;}
+.priority-opt{
+  border:1px solid var(--border); background:var(--panel-2); border-radius:var(--radius);
+  padding:8px 4px; text-align:center; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em;
+  color:var(--text-muted); position:relative; transition:.15s;
+}
+.priority-opt input{position:absolute; opacity:0; inset:0; margin:0; cursor:pointer;}
+.priority-opt b{display:block; font-size:15px; margin-bottom:2px;}
+.priority-opt[data-p="baixa"] b{color:var(--green);}
+.priority-opt[data-p="media"] b{color:var(--blue);}
+.priority-opt[data-p="alta"] b{color:var(--amber);}
+.priority-opt[data-p="urgente"] b{color:var(--red);}
+.priority-opt.active{background:var(--panel-3); border-color:currentColor; color:var(--text);}
+.priority-opt.active[data-p="baixa"]{border-color:var(--green);}
+.priority-opt.active[data-p="media"]{border-color:var(--blue);}
+.priority-opt.active[data-p="alta"]{border-color:var(--amber);}
+.priority-opt.active[data-p="urgente"]{border-color:var(--red);}
 
-        .fab-button:hover {
-            background-color: #0369a1;
-            color: white;
-        }
-    </style>
+.upload-box{
+  border:1.5px dashed var(--border); border-radius:var(--radius); padding:14px; text-align:center;
+  color:var(--text-muted); font-size:12px; cursor:pointer; position:relative; background:var(--panel-2);
+}
+.upload-box:hover{border-color:var(--amber);}
+.upload-box input{position:absolute; inset:0; opacity:0; cursor:pointer;}
+.upload-preview{width:100%; max-height:120px; object-fit:cover; border-radius:var(--radius); display:none; margin-top:8px;}
+
+.btn{
+  border:none; border-radius:var(--radius); padding:10px 16px; font-size:12.5px; font-weight:600;
+  text-transform:uppercase; letter-spacing:.05em; display:inline-flex; align-items:center; gap:7px;
+  transition:.15s;
+}
+.btn-primary{background:var(--amber); color:#191100; width:100%; justify-content:center; padding:12px;}
+.btn-primary:hover{background:#ffb845;}
+.btn-ghost{background:transparent; border:1px solid var(--border); color:var(--text-muted);}
+.btn-ghost:hover{border-color:var(--text-muted); color:var(--text);}
+.btn-small{padding:7px 10px; font-size:11px;}
+.btn-outline-blue{border:1px solid var(--blue); color:var(--blue); background:rgba(74,158,222,.08);}
+.btn-outline-green{border:1px solid var(--green); color:var(--green); background:rgba(67,183,122,.08);}
+.btn-outline-amber{border:1px solid var(--amber); color:var(--amber); background:rgba(245,166,35,.08);}
+.btn:disabled{opacity:.35; cursor:not-allowed;}
+
+/* ---------- BOARD ---------- */
+.board-head{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px;}
+.filters{display:flex; gap:6px; flex-wrap:wrap;}
+.chip{
+  border:1px solid var(--border); background:var(--panel); color:var(--text-muted);
+  padding:6px 12px; border-radius:30px; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em;
+}
+.chip.active{background:var(--panel-3); color:var(--text); border-color:var(--amber);}
+.board-cols{display:grid; grid-template-columns:1fr; gap:12px;}
+.empty-state{
+  border:1px dashed var(--border); border-radius:var(--radius); padding:40px 20px; text-align:center; color:var(--text-faint);
+}
+.empty-state b{display:block; color:var(--text-muted); font-family:'Oswald',sans-serif; font-size:16px; margin-bottom:4px; text-transform:uppercase;}
+
+/* ---------- TASK CARD ---------- */
+.task{
+  position:relative; background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+  padding:14px 16px 14px 20px; overflow:hidden; box-shadow:var(--shadow);
+}
+.task::before{
+  content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:var(--steel);
+}
+.task[data-priority="baixa"]::before{background:var(--green);}
+.task[data-priority="media"]::before{background:var(--blue);}
+.task[data-priority="alta"]::before{background:var(--amber);}
+.task[data-priority="urgente"]::before{background:var(--red);}
+.task[data-priority="urgente"]{animation:urgentglow 2.4s infinite;}
+@keyframes urgentglow{0%,100%{box-shadow:var(--shadow);}50%{box-shadow:0 0 0 1px rgba(229,72,77,.4), var(--shadow);}}
+.task-hole{
+  position:absolute; left:-1px; top:14px; width:10px; height:10px; border-radius:50%;
+  background:var(--bg); border:1px solid var(--border);
+}
+.task-top{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:8px;}
+.task-id{font-size:10.5px; color:var(--text-faint);}
+.stamp{
+  font-family:'Oswald',sans-serif; font-size:10px; font-weight:700; letter-spacing:.12em;
+  padding:3px 9px; border:1.5px solid; border-radius:2px; transform:rotate(-3deg); text-transform:uppercase;
+  white-space:nowrap;
+}
+.stamp.baixa{color:var(--green); border-color:var(--green);}
+.stamp.media{color:var(--blue); border-color:var(--blue);}
+.stamp.alta{color:var(--amber); border-color:var(--amber);}
+.stamp.urgente{color:var(--red); border-color:var(--red); background:rgba(229,72,77,.08);}
+.task h3{font-size:16.5px; margin-bottom:6px;}
+.task-desc{font-size:12.5px; color:var(--text-muted); line-height:1.5; margin-bottom:10px;}
+.task-meta{display:flex; flex-wrap:wrap; gap:10px 16px; font-size:11px; color:var(--text-muted); margin-bottom:10px;}
+.task-meta span{display:flex; align-items:center; gap:5px;}
+.task-meta svg{width:13px;height:13px; opacity:.7;}
+.status-pill{
+  font-size:10px; text-transform:uppercase; letter-spacing:.06em; padding:3px 9px; border-radius:20px; font-weight:600;
+}
+.status-pill.pendente{background:rgba(91,101,112,.18); color:var(--steel);}
+.status-pill.andamento{background:rgba(74,158,222,.15); color:var(--blue);}
+.status-pill.concluida{background:rgba(67,183,122,.15); color:var(--green);}
+.thumbs{display:flex; gap:8px; margin-bottom:10px;}
+.thumb{flex:1; position:relative; border-radius:var(--radius); overflow:hidden; border:1px solid var(--border); background:var(--panel-2); min-height:70px;}
+.thumb img{width:100%; height:80px; object-fit:cover; display:block; cursor:pointer;}
+.thumb span{position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,.55); font-size:9.5px; text-transform:uppercase; letter-spacing:.08em; padding:3px 6px; color:#fff;}
+.thumb.empty{display:flex; align-items:center; justify-content:center; color:var(--text-faint); font-size:10.5px; text-transform:uppercase; text-align:center; padding:6px;}
+.task-actions{display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid var(--border-soft); padding-top:10px;}
+
+/* ---------- MODAL ---------- */
+.overlay{
+  position:fixed; inset:0; background:rgba(10,11,12,.75); backdrop-filter:blur(2px);
+  display:none; align-items:center; justify-content:center; z-index:100; padding:20px;
+}
+.overlay.open{display:flex;}
+.modal{
+  background:var(--panel); border:1px solid var(--border); border-radius:6px; width:100%; max-width:480px;
+  box-shadow:0 20px 60px rgba(0,0,0,.5); max-height:88vh; overflow-y:auto;
+}
+.modal-lg{max-width:640px;}
+.modal-head{display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--border);}
+.modal-head h3{font-size:15px; text-transform:uppercase;}
+.modal-close{background:none; border:none; color:var(--text-muted); font-size:20px; line-height:1; padding:4px;}
+.modal-close:hover{color:var(--text);}
+.modal-body{padding:18px;}
+.modal-body p{font-size:12.5px; color:var(--text-muted); line-height:1.6;}
+
+.send-grid{display:flex; flex-direction:column; gap:10px; margin-top:14px;}
+.send-btn{
+  display:flex; align-items:center; justify-content:center; gap:10px; padding:14px 16px;
+  border:1px solid var(--border); border-radius:var(--radius); background:var(--panel-2); color:var(--text);
+  font-size:12px; text-transform:uppercase; letter-spacing:.04em; font-weight:600; text-decoration:none;
+}
+.send-btn:hover{border-color:var(--amber); background:var(--panel-3);}
+.send-btn svg{width:20px;height:20px;}
+
+.upload-box.small{padding:10px;}
+.modal img.full{width:100%; border-radius:var(--radius); border:1px solid var(--border);}
+
+/* ---------- TOASTS ---------- */
+.toasts{position:fixed; bottom:18px; right:18px; z-index:200; display:flex; flex-direction:column; gap:8px; max-width:320px;}
+.toast{
+  background:var(--panel-2); border:1px solid var(--border); border-left:3px solid var(--amber);
+  padding:12px 14px; border-radius:var(--radius); font-size:12.5px; box-shadow:var(--shadow);
+  animation:slidein .25s ease;
+}
+.toast b{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--amber); margin-bottom:2px;}
+@keyframes slidein{from{transform:translateX(20px); opacity:0;} to{transform:translateX(0); opacity:1;}}
+
+.foot-note{padding:0 22px 30px; font-size:11px; color:var(--text-faint); max-width:700px;}
+
+@media (max-width:520px){
+  .priority-grid{grid-template-columns:repeat(2,1fr);}
+  .stats-strip{grid-template-columns:repeat(2,1fr);}
+}
+</style>
 </head>
 <body>
 
-    <!-- Navbar Header -->
-    <nav class="navbar navbar-expand-lg navbar-custom sticky-top">
-        <div class="container-fluid px-4">
-            <a class="navbar-brand d-flex align-items-center gap-2" href="#">
-                <i class="fa-solid fa-list-check text-primary fs-4"></i>
-                <span class="fw-bold fs-5">Painel de Pendências · AutomaçãoVD</span>
-            </a>
-            
-            <div class="d-flex align-items-center gap-3">
-                <div class="d-none d-md-flex align-items-center gap-2">
-                    <label for="myShift" class="form-label mb-0 text-muted small fw-medium">Meu Turno:</label>
-                    <select id="myShift" class="form-select form-select-sm" style="width: auto;">
-                        <option value="">Todos</option>
-                        <option value="1°turno">1° Turno</option>
-                        <option value="2°turno">2° Turno</option>
-                        <option value="3°turno">3° Turno</option>
-                        <option value="Comercial">Comercial</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Conteúdo Principal -->
-    <div class="container-fluid px-4 mt-4">
-        
-        <!-- Filtros e Pesquisa -->
-        <div class="filter-card">
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <div class="input-group">
-                        <span class="input-group-text bg-white"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
-                        <input type="text" id="searchInput" class="form-control" placeholder="Buscar por descrição, linha ou solicitante...">
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <select id="filterStatus" class="form-select">
-                        <option value="todos">Todos os Status</option>
-                        <option value="Pendente" selected>Pendente</option>
-                        <option value="Em Andamento">Em Andamento</option>
-                        <option value="Concluído">Concluído</option>
-                        <option value="Cancelado">Cancelado</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <select id="filterShift" class="form-select">
-                        <option value="todos">Todos os Turnos Destino</option>
-                        <option value="1°turno">1° Turno</option>
-                        <option value="2°turno">2° Turno</option>
-                        <option value="3°turno">3° Turno</option>
-                        <option value="Comercial">Comercial</option>
-                    </select>
-                </div>
-                <div class="col-md-2 d-grid">
-                    <button id="btnClearFilters" class="btn btn-outline-secondary">
-                        <i class="fa-solid fa-filter-circle-xmark me-1"></i> Limpar
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Lista de Solicitações -->
-        <div class="row" id="cardsContainer">
-            <!-- Cards injetados via JS -->
-            <div class="col-12 text-center py-5">
-                <div class="spinner-border text-primary" role="status"></div>
-                <p class="text-muted mt-2">Carregando pendências...</p>
-            </div>
-        </div>
-
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#14171a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
     </div>
+    <div>
+      <h1>Painel de Pendências</h1>
+      <p>AutomaçãoVD</p>
+    </div>
+  </div>
+  <div class="top-controls">
+    <div class="shift-select">
+      <label>Meu turno</label>
+      <select id="myShift">
+        <option value="1°turno">1°turno</option>
+        <option value="2°turno">2°turno</option>
+        <option value="3°turno">3°turno</option>
+      </select>
+    </div>
+    <div class="sync-pill"><span class="dot pulse" id="syncDot"></span><span id="syncLabel">Conectando nuvem...</span></div>
+    <div class="clock mono" id="clock">--:--:--</div>
+  </div>
+</header>
 
-    <!-- Botão Flutuante (Nova Solicitação) -->
-    <button class="fab-button" data-bs-toggle="modal" data-bs-target="#modalNovaSolicitacao" title="Nova Solicitação">
-        <i class="fa-solid fa-plus"></i>
+<section class="stats-strip">
+  <div class="stat pendente"><b id="statPendente">0</b><span>Pendentes</span></div>
+  <div class="stat andamento"><b id="statAndamento">0</b><span>Em andamento</span></div>
+  <div class="stat concluida"><b id="statConcluida">0</b><span>Concluídas hoje</span></div>
+  <div class="stat urgente"><b id="statUrgente">0</b><span>Urgentes em aberto</span></div>
+</section>
+
+<div class="layout">
+  <!-- FORM -->
+  <div class="card form-card">
+    <div class="card-head">
+      <h2>Nova solicitação</h2>
+      <span class="tag-eyebrow mono">O.S.</span>
+    </div>
+    <div class="form-body">
+      <form id="taskForm">
+        <div class="field">
+          <label for="fTitle">Título do reparo</label>
+          <input type="text" id="fTitle" placeholder="Ex: Vazamento na tubulação" required maxlength="80">
+        </div>
+        <div class="field">
+          <label for="fLocation">Local / equipamento</label>
+          <input type="text" id="fLocation" placeholder="Ex: Linha 3 - Prensa hidráulica" required maxlength="80">
+        </div>
+        <div class="field">
+          <label for="fDesc">Descrição do problema</label>
+          <textarea id="fDesc" placeholder="Descreva o que precisa ser reparado..." required maxlength="600"></textarea>
+        </div>
+        <div class="field">
+          <label>Prioridade</label>
+          <div class="priority-grid" id="priorityGrid">
+            <label class="priority-opt" data-p="baixa"><input type="radio" name="priority" value="baixa"><b>●</b>Baixa</label>
+            <label class="priority-opt" data-p="media"><input type="radio" name="priority" value="media"><b>●</b>Média</label>
+            <label class="priority-opt active" data-p="alta"><input type="radio" name="priority" value="alta" checked><b>●</b>Alta</label>
+            <label class="priority-opt" data-p="urgente"><input type="radio" name="priority" value="urgente"><b>●</b>Urgente</label>
+          </div>
+        </div>
+        <div class="field">
+          <label for="fTurnoDestino">Turno responsável pela execução</label>
+          <select id="fTurnoDestino" required>
+            <option value="1°Turno">1°Turno</option>
+            <option value="2°Turno">2°Turno</option>
+            <option value="3°Turno">3°Turno</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fRequester">Solicitado por</label>
+          <input type="text" id="fRequester" placeholder="Seu nome" required maxlength="60">
+        </div>
+        <div class="field">
+          <label>Foto do "antes" (opcional)</label>
+          <div class="upload-box" id="beforeBox">
+            <span id="beforeLabel">Toque para anexar uma imagem</span>
+            <input type="file" accept="image/*" id="beforeInput">
+          </div>
+          <img class="upload-preview" id="beforePreview">
+        </div>
+        <button type="submit" class="btn btn-primary">Registrar solicitação</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- BOARD -->
+  <div>
+    <div class="board-head">
+      <div class="filters" id="statusFilters">
+        <button class="chip active" data-status="todos">Todos</button>
+        <button class="chip" data-status="meuturno">Meu turno</button>
+        <button class="chip" data-status="pendente">Pendentes</button>
+        <button class="chip" data-status="andamento">Em andamento</button>
+        <button class="chip" data-status="concluida">Concluídas</button>
+      </div>
+      <div class="filters" id="priorityFilters">
+        <button class="chip active" data-priority="todas">Toda prioridade</button>
+        <button class="chip" data-priority="urgente">Urgente</button>
+        <button class="chip" data-priority="alta">Alta</button>
+        <button class="chip" data-priority="media">Média</button>
+        <button class="chip" data-priority="baixa">Baixa</button>
+      </div>
+    </div>
+    <div class="board-cols" id="board">
+      <div class="empty-state"><b>Nenhuma solicitação ainda</b>Registre a primeira solicitação de reparo ao lado.</div>
+    </div>
+  </div>
+</div>
+
+<p class="foot-note">Os dados e fotos desta central são sincronizados diretamente via Firestore em tempo real.</p>
+
+<!-- Modal: detalhes -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal modal-lg">
+    <div class="modal-head"><h3 id="detailTitle">Detalhes</h3><button class="modal-close" id="detailClose">&times;</button></div>
+    <div class="modal-body" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- Modal: enviar relatório -->
+<div class="overlay" id="sendOverlay">
+  <div class="modal">
+    <div class="modal-head"><h3>Enviar relatório</h3><button class="modal-close" id="sendClose">&times;</button></div>
+    <div class="modal-body">
+      <p>O relatório em PowerPoint foi gerado com sucesso. Escolha como deseja acessá-lo:</p>
+      <div class="send-grid" id="sendGrid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: imagem em tela cheia -->
+<div class="overlay" id="imgOverlay">
+  <div class="modal">
+    <div class="modal-head"><h3 id="imgTitle">Imagem</h3><button class="modal-close" id="imgClose">&times;</button></div>
+    <div class="modal-body"><img class="full" id="imgFull"></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ==================== UTIL ==================== */
+const $ = (sel, el=document) => el.querySelector(sel);
+const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+const PRIORITY_LABEL = {baixa:'Baixa', media:'Média', alta:'Alta', urgente:'Urgente'};
+const STATUS_LABEL = {pendente:'Pendente', andamento:'Em andamento', concluida:'Concluída'};
+
+function uid(){ return 'OS-' + Date.now().toString(36).toUpperCase() + '-' + Math.floor(Math.random()*900+100); }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function timeAgo(iso){
+  if(!iso) return '';
+  const diff = (Date.now() - new Date(iso).getTime())/1000;
+  if(diff < 60) return 'agora';
+  if(diff < 3600) return Math.floor(diff/60)+'min atrás';
+  if(diff < 86400) return Math.floor(diff/3600)+'h atrás';
+  return Math.floor(diff/86400)+'d atrás';
+}
+function fmtDateTime(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+function showToast(title, msg){
+  const box = document.createElement('div');
+  box.className = 'toast';
+  box.innerHTML = `<b>${escapeHtml(title)}</b>${escapeHtml(msg)}`;
+  $('#toasts').appendChild(box);
+  setTimeout(()=>{ box.style.opacity='0'; box.style.transition='opacity .3s'; setTimeout(()=>box.remove(),300); }, 6000);
+}
+
+/* COMPRESSÃO DE IMAGEM OTIMIZADA PARA NUVEM E DISPOSITIVOS MÓVEIS (Evita travar o Firestore) */
+function compressImage(file, maxW=800, quality=0.5){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Falha ao ler imagem'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Falha ao carregar imagem'));
+      img.onload = () => {
+        const scale = Math.min(1, maxW / img.width);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,w,h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function forceDownloadBlob(blob, filename) {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.style.display = 'none';
+  a.href = url;
+  a.download = filename;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  }, 60000);
+}
+
+/* ==================== STATE ==================== */
+let INDEX = []; 
+let currentBeforeImage = null;
+
+/* ==================== BANCO DE DADOS ==================== */
+async function saveTaskToCloud(taskData) {
+  const { collection, addDoc } = window.fbMethods;
+  const payload = {
+    ...taskData,
+    createdAt: new Date().toISOString()
+  };
+  await addDoc(collection(window.db, "solicitacoes"), payload);
+}
+
+async function updateTaskInCloud(docId, updatePayload) {
+  const { doc, updateDoc } = window.fbMethods;
+  const taskRef = doc(window.db, "solicitacoes", docId);
+  await updateDoc(taskRef, updatePayload);
+}
+
+function listenToLiveUpdates() {
+  const { collection, query, orderBy, onSnapshot } = window.fbMethods;
+  const q = query(collection(window.db, "solicitacoes"), orderBy("createdAt", "desc"));
+
+  /* Sincronização em tempo real otimizada para conexões mobile */
+  onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+    const updatedList = [];
+    snapshot.forEach((docSnap) => {
+      updatedList.push({ docId: docSnap.id, ...docSnap.data() });
+    });
+
+    if (INDEX.length > 0 && updatedList.length > INDEX.length) {
+      const latest = updatedList[0];
+      if (latest.requestedBy !== $('#fRequester').value) {
+        showToast('Nova solicitação', `"${latest.title}" — Turno ${latest.turnoDestino}`);
+      }
+    }
+
+    INDEX = updatedList;
+    renderBoard();
+    updateStats();
+    $('#syncDot').style.background = 'var(--green)';
+    $('#syncLabel').textContent = 'sincronizado em tempo real';
+  }, (error) => {
+    $('#syncDot').style.background = 'var(--red)';
+    $('#syncLabel').textContent = 'falha na conexão nuvem';
+    console.error("Erro no Firestore:", error);
+  });
+}
+
+/* ==================== RENDER ==================== */
+function updateStats(){
+  const today = new Date().toDateString();
+  const pendentes = INDEX.filter(t=>t.status==='pendente').length;
+  const andamento = INDEX.filter(t=>t.status==='andamento').length;
+  const concluidasHoje = INDEX.filter(t=>t.status==='concluida' && t.completedAt && new Date(t.completedAt).toDateString()===today).length;
+  const urgentes = INDEX.filter(t=>t.priority==='urgente' && t.status!=='concluida').length;
+  $('#statPendente').textContent = pendentes;
+  $('#statAndamento').textContent = andamento;
+  $('#statConcluida').textContent = concluidasHoje;
+  $('#statUrgente').textContent = urgentes;
+}
+
+function priorityWeight(p){ return {urgente:0, alta:1, media:2, baixa:3}[p] ?? 4; }
+
+function getActiveFilters(){
+  const status = $('#statusFilters .chip.active')?.dataset.status || 'todos';
+  const priority = $('#priorityFilters .chip.active')?.dataset.priority || 'todas';
+  return {status, priority};
+}
+
+function renderBoard(){
+  const board = $('#board');
+  const {status, priority} = getActiveFilters();
+  const myShift = $('#myShift').value;
+  let list = INDEX.slice();
+
+  if(status === 'meuturno') list = list.filter(t => t.turnoDestino === myShift);
+  else if(status !== 'todos') list = list.filter(t => t.status === status);
+  if(priority !== 'todas') list = list.filter(t => t.priority === priority);
+
+  list.sort((a,b) => {
+    if(a.status !== b.status){
+      const order = {pendente:0, andamento:1, concluida:2};
+      return order[a.status]-order[b.status];
+    }
+    if(priorityWeight(a.priority) !== priorityWeight(b.priority)) return priorityWeight(a.priority)-priorityWeight(b.priority);
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+
+  if(list.length === 0){
+    board.innerHTML = `<div class="empty-state"><b>Nada por aqui</b>Nenhuma solicitação corresponde a este filtro.</div>`;
+    return;
+  }
+
+  board.innerHTML = list.map(t => taskCardHtml(t)).join('');
+}
+
+function taskCardHtml(t){
+  const statusClass = t.status === 'pendente' ? 'pendente' : t.status === 'andamento' ? 'andamento' : 'concluida';
+  const hasBefore = !!t.beforeImage;
+  const hasAfter = !!t.afterImage;
+
+  return `
+  <div class="task" data-priority="${t.priority}" data-id="${t.docId}">
+    <span class="task-hole"></span>
+    <div class="task-top">
+      <div>
+        <div class="task-id mono">${t.id}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="status-pill ${statusClass}">${STATUS_LABEL[t.status]}</span>
+        <span class="stamp ${t.priority}">${PRIORITY_LABEL[t.priority]}</span>
+      </div>
+    </div>
+    <h3>${escapeHtml(t.title)}</h3>
+    <div class="task-desc">${escapeHtml(t.location)}</div>
+    <div class="task-meta">
+      <span>👤 ${escapeHtml(t.requestedBy)}</span>
+      <span>🔁 Para: ${escapeHtml(t.turnoDestino)}</span>
+      <span>🕒 ${timeAgo(t.createdAt)}</span>
+    </div>
+    <div class="thumbs">
+      <div class="thumb ${hasBefore?'':'empty'}" data-view="before" data-id="${t.docId}">
+        ${hasBefore ? `<img src="${t.beforeImage}"><span>Antes</span>` : 'Sem foto do antes'}
+      </div>
+      <div class="thumb ${hasAfter?'':'empty'}" data-view="after" data-id="${t.docId}">
+        ${hasAfter ? `<img src="${t.afterImage}"><span>Depois</span>` : 'Sem foto do depois'}
+      </div>
+    </div>
+    <div class="task-actions">
+      ${t.status==='pendente' ? `<button class="btn btn-small btn-outline-blue" data-action="start" data-id="${t.docId}">Iniciar execução</button>` : ''}
+      ${t.status==='andamento' ? `<button class="btn btn-small btn-outline-green" data-action="complete" data-id="${t.docId}">Concluir reparo</button>` : ''}
+      <button class="btn btn-small btn-ghost" data-action="detail" data-id="${t.docId}">Ver detalhes</button>
+      <button class="btn btn-small btn-outline-amber" data-action="report" data-id="${t.docId}">Gerar relatório PPT</button>
+    </div>
+  </div>`;
+}
+
+/* ==================== FORM ==================== */
+$$('#priorityGrid .priority-opt').forEach(opt=>{
+  opt.addEventListener('click', ()=>{
+    $$('#priorityGrid .priority-opt').forEach(o=>o.classList.remove('active'));
+    opt.classList.add('active');
+  });
+});
+
+$('#beforeBox').addEventListener('click', e => { if(e.target.tagName!=='INPUT') $('#beforeInput').click(); });
+$('#beforeInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  $('#beforeLabel').textContent = 'Compactando foto...';
+  try{
+    currentBeforeImage = await compressImage(file);
+    $('#beforePreview').src = currentBeforeImage;
+    $('#beforePreview').style.display = 'block';
+    $('#beforeLabel').textContent = 'Imagem anexada — toque para trocar';
+  }catch(err){
+    $('#beforeLabel').textContent = 'Falha ao processar imagem, tente novamente';
+  }
+});
+
+$('#taskForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const submitBtn = e.target.querySelector('button[type=submit]');
+  submitBtn.disabled = true; submitBtn.textContent = 'Gravando no Firestore...';
+
+  const id = uid();
+  const priority = $('#priorityGrid input[name=priority]:checked').value;
+
+  const fullTask = {
+    id,
+    title: $('#fTitle').value.trim(),
+    location: $('#fLocation').value.trim(),
+    description: $('#fDesc').value.trim(),
+    priority,
+    turnoOrigem: $('#myShift').value,
+    turnoDestino: $('#fTurnoDestino').value,
+    requestedBy: $('#fRequester').value.trim(),
+    status: 'pendente',
+    beforeImage: currentBeforeImage || null,
+    afterImage: null,
+    startedAt: null,
+    completedAt: null,
+    completedBy: null
+  };
+
+  try{
+    await saveTaskToCloud(fullTask);
+    showToast('Solicitação gravada', `"${fullTask.title}" salva no Firestore com sucesso.`);
+    e.target.reset();
+    currentBeforeImage = null;
+    $('#beforePreview').style.display='none';
+    $('#beforeLabel').textContent = 'Toque para anexar uma imagem';
+    $$('#priorityGrid .priority-opt').forEach(o=>o.classList.remove('active'));
+    $('#priorityGrid .priority-opt[data-p=alta]').classList.add('active');
+  }catch(err){
+    showToast('Erro ao salvar', 'Não foi possível salvar no Firestore. Verifique as Regras no Console.');
+    console.error(err);
+  }finally{
+    submitBtn.disabled = false; submitBtn.textContent = 'Registrar solicitação';
+  }
+});
+
+/* ==================== FILTERS ==================== */
+$('#statusFilters').addEventListener('click', e => {
+  const chip = e.target.closest('.chip'); if(!chip) return;
+  $$('#statusFilters .chip').forEach(c=>c.classList.remove('active'));
+  chip.classList.add('active');
+  renderBoard();
+});
+$('#priorityFilters').addEventListener('click', e => {
+  const chip = e.target.closest('.chip'); if(!chip) return;
+  $$('#priorityFilters .chip').forEach(c=>c.classList.remove('active'));
+  chip.classList.add('active');
+  renderBoard();
+});
+$('#myShift').addEventListener('change', renderBoard);
+
+/* ==================== BOARD ACTIONS ==================== */
+$('#board').addEventListener('click', async (e) => {
+  const actionBtn = e.target.closest('[data-action]');
+  const thumb = e.target.closest('.thumb[data-view]');
+
+  if(thumb && !thumb.classList.contains('empty')){
+    const docId = thumb.dataset.id;
+    const task = INDEX.find(t => t.docId === docId);
+    if(task){
+      const src = thumb.dataset.view === 'before' ? task.beforeImage : task.afterImage;
+      if(src){
+        $('#imgTitle').textContent = (thumb.dataset.view==='before'?'Antes — ':'Depois — ') + task.title;
+        $('#imgFull').src = src;
+        $('#imgOverlay').classList.add('open');
+      }
+    }
+    return;
+  }
+
+  if(!actionBtn) return;
+  const docId = actionBtn.dataset.id;
+  const action = actionBtn.dataset.action;
+
+  if(action === 'start'){
+    await updateTaskInCloud(docId, {
+      status: 'andamento',
+      startedAt: new Date().toISOString()
+    });
+    showToast('Iniciado', 'Reparo marcado em andamento.');
+  }else if(action === 'complete'){
+    openCompleteFlow(docId);
+  }else if(action === 'detail'){
+    openDetail(docId);
+  }else if(action === 'report'){
+    actionBtn.disabled = true; actionBtn.textContent = 'Gerando...';
+    try{
+      await generateReport(docId);
+    }catch(err){
+      showToast('Erro no relatório', 'Não foi possível gerar o PPT.');
+      console.error(err);
+    }
+    actionBtn.disabled = false; actionBtn.textContent = 'Gerar relatório PPT';
+  }
+});
+
+function openCompleteFlow(docId){
+  const overlay = $('#detailOverlay');
+  $('#detailTitle').textContent = 'Concluir reparo';
+  $('#detailBody').innerHTML = `
+    <p>Anexe uma foto do "depois" (opcional) e confirme a conclusão do reparo.</p>
+    <div class="field">
+      <label>Concluído por</label>
+      <input type="text" id="completeBy" placeholder="Seu nome" maxlength="60">
+    </div>
+    <div class="field">
+      <label>Foto do "depois"</label>
+      <div class="upload-box small" id="afterBox">
+        <span id="afterLabel">Toque para anexar uma imagem</span>
+        <input type="file" accept="image/*" id="afterInput">
+      </div>
+      <img class="upload-preview" id="afterPreview">
+    </div>
+    <button class="btn btn-primary" id="confirmComplete">Confirmar conclusão</button>
+  `;
+  let afterImage = null;
+  $('#afterBox').addEventListener('click', e => { if(e.target.tagName!=='INPUT') $('#afterInput').click(); });
+  $('#afterInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0]; if(!file) return;
+    $('#afterLabel').textContent = 'Compactando...';
+    afterImage = await compressImage(file);
+    $('#afterPreview').src = afterImage; $('#afterPreview').style.display='block';
+    $('#afterLabel').textContent = 'Imagem anexada — toque para trocar';
+  });
+  $('#confirmComplete').addEventListener('click', async () => {
+    const completedBy = $('#completeBy').value.trim() || $('#myShift').value;
+    $('#confirmComplete').disabled = true;
+    $('#confirmComplete').textContent = 'Salvando no Firestore...';
+    
+    await updateTaskInCloud(docId, {
+      status: 'concluida',
+      completedAt: new Date().toISOString(),
+      completedBy,
+      afterImage: afterImage || null
+    });
+
+    $('#detailOverlay').classList.remove('open');
+    showToast('Reparo concluído', 'Status atualizado em tempo real para todos os turnos.');
+  });
+  overlay.classList.add('open');
+}
+
+function openDetail(docId){
+  const task = INDEX.find(t => t.docId === docId);
+  if(!task) return;
+  $('#detailTitle').textContent = task.title;
+  $('#detailBody').innerHTML = `
+    <p><b class="mono" style="color:var(--text)">${task.id}</b></p>
+    <p><strong style="color:var(--text)">Local:</strong> ${escapeHtml(task.location)}</p>
+    <p><strong style="color:var(--text)">Descrição:</strong> ${escapeHtml(task.description)}</p>
+    <p><strong style="color:var(--text)">Prioridade:</strong> ${PRIORITY_LABEL[task.priority]} &nbsp;|&nbsp; <strong style="color:var(--text)">Status:</strong> ${STATUS_LABEL[task.status]}</p>
+    <p><strong style="color:var(--text)">Solicitado por:</strong> ${escapeHtml(task.requestedBy)} (turno ${escapeHtml(task.turnoOrigem)})</p>
+    <p><strong style="color:var(--text)">Turno responsável:</strong> ${escapeHtml(task.turnoDestino)}</p>
+    <p><strong style="color:var(--text)">Aberto em:</strong> ${fmtDateTime(task.createdAt)}</p>
+    ${task.startedAt ? `<p><strong style="color:var(--text)">Iniciado em:</strong> ${fmtDateTime(task.startedAt)}</p>` : ''}
+    ${task.completedAt ? `<p><strong style="color:var(--text)">Concluído em:</strong> ${fmtDateTime(task.completedAt)} por ${escapeHtml(task.completedBy||'')}</p>` : ''}
+    <div class="thumbs" style="margin-top:12px;">
+      <div class="thumb ${task.beforeImage?'':'empty'}">${task.beforeImage ? `<img src="${task.beforeImage}" style="height:110px;">` : 'Sem foto do antes'}</div>
+      <div class="thumb ${task.afterImage?'':'empty'}">${task.afterImage ? `<img src="${task.afterImage}" style="height:110px;">` : 'Sem foto do depois'}</div>
+    </div>
+  `;
+  $('#detailOverlay').classList.add('open');
+}
+
+$('#detailClose').addEventListener('click', ()=>$('#detailOverlay').classList.remove('open'));
+$('#imgClose').addEventListener('click', ()=>$('#imgOverlay').classList.remove('open'));
+$('#sendClose').addEventListener('click', ()=>$('#sendOverlay').classList.remove('open'));
+[$('#detailOverlay'), $('#imgOverlay'), $('#sendOverlay')].forEach(ov=>{
+  ov.addEventListener('click', e => { if(e.target===ov) ov.classList.remove('open'); });
+});
+
+/* ==================== PPTX GENERATION ==================== */
+const EMU_IN = 914400;
+const SLIDE_W = 12192000, SLIDE_H = 6858000; 
+
+function xmlEscape(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+}
+
+function shapeRect(id, name, x, y, cx, cy, color){
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${name}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>
+  <a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr>
+  <p:txBody><a:bodyPr/><a:lstStyle/><a:p/></p:txBody></p:sp>`;
+}
+
+function shapeText(id, name, x, y, cx, cy, text, {size=1400, bold=false, color='1A1D21', align='l', font='Inter'}={}){
+  const lines = String(text||'').split('\n');
+  const paras = lines.map(line => `<a:p><a:pPr algn="${align}"/><a:r><a:rPr lang="pt-BR" sz="${size}" b="${bold?1:0}" dirty="0"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${font}"/></a:rPr><a:t>${xmlEscape(line)}</a:t></a:r></a:p>`).join('');
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${name}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>
+  <p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>
+  <a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>
+  <p:txBody><a:bodyPr wrap="square" anchor="t"><a:normAutofit/></a:bodyPr><a:lstStyle/>${paras}</p:txBody></p:sp>`;
+}
+
+function shapePic(id, name, rId, x, y, cx, cy){
+  return `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="${name}"/><p:cNPicPr><a:picLocks noChangeAspect="1"/></p:cNPicPr><p:nvPr/></p:nvPicPr>
+  <p:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>
+  <p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:ln w="6350"><a:solidFill><a:srgbClr val="343B40"/></a:solidFill></a:ln></p:spPr></p:pic>`;
+}
+
+function slideXml(shapesXml){
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>
+<p:spTree>
+<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>
+${shapesXml}
+</p:spTree></p:cSld>
+<p:clrMapOvr><a:overrideClrMapping bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:clrMapOvr>
+</p:sld>`;
+}
+
+async function buildPptx(task){
+  const zip = new JSZip();
+  const media = []; 
+  let slideCount = 0;
+  const slides = [];
+
+  function pushSlide(shapesXml, imageRels=[]){
+    slideCount++;
+    slides.push({ xml: slideXml(shapesXml), imageRels });
+  }
+
+  // --- Slide 1: capa ---
+  let shapes = '';
+  shapes += shapeRect(2,'faixa',0,0,SLIDE_W,1500000,'14171A');
+  shapes += shapeRect(3,'faixaAccent',0,1500000,SLIDE_W,60000,'F5A623');
+  shapes += shapeText(4,'eyebrow',760000,420000,6000000,400000,'RELATÓRIO DE MANUTENÇÃO', {size:1200,bold:true,color:'F5A623',font:'Oswald'});
+  shapes += shapeText(5,'titulo',760000,750000,9500000,600000, task.title, {size:2600,bold:true,color:'FFFFFF',font:'Oswald'});
+  shapes += shapeText(6,'os', 760000,2100000,8000000,400000, task.id, {size:1400,color:'8B939A',font:'JetBrains Mono'});
+  const metaLines =
+`Local / equipamento: ${task.location}
+Prioridade: ${PRIORITY_LABEL[task.priority]}
+Status: ${STATUS_LABEL[task.status]}
+Solicitado por: ${task.requestedBy}  (turno ${task.turnoOrigem})
+Turno responsável pela execução: ${task.turnoDestino}
+Aberto em: ${fmtDateTime(task.createdAt)}${task.completedAt ? '\nConcluído em: ' + fmtDateTime(task.completedAt) + (task.completedBy ? ' por ' + task.completedBy : '') : ''}`;
+  shapes += shapeText(7,'meta',760000,2650000,9500000,2800000, metaLines, {size:1400,color:'2b3136',font:'Inter'});
+  shapes += shapeText(8,'gerado',760000,6300000,9500000,300000, 'Gerado automaticamente pelo Painel de Manutenção em ' + fmtDateTime(new Date().toISOString()), {size:900,color:'8B939A',font:'Inter'});
+  pushSlide(shapes);
+
+  // --- Slide 2: descrição ---
+  shapes = '';
+  shapes += shapeRect(2,'faixa',0,0,SLIDE_W,900000,'14171A');
+  shapes += shapeText(3,'titulo',600000,260000,10000000,500000,'DESCRIÇÃO DO PROBLEMA', {size:1800,bold:true,color:'FFFFFF',font:'Oswald'});
+  shapes += shapeText(4,'desc',600000,1250000,10900000,5000000, task.description || '(sem descrição informada)', {size:1500,color:'1A1D21',font:'Inter'});
+  pushSlide(shapes);
+
+  // --- Slide 3: fotos ---
+  if(task.beforeImage || task.afterImage){
+    shapes = '';
+    shapes += shapeRect(2,'faixa',0,0,SLIDE_W,900000,'14171A');
+    shapes += shapeText(3,'titulo',600000,260000,10000000,500000,'REGISTRO FOTOGRÁFICO', {size:1800,bold:true,color:'FFFFFF',font:'Oswald'});
+    const imageRels = [];
+    const picW = 5400000, picH = 4000000, picY = 1500000;
+    
+    if(task.beforeImage){
+      const name = 'image1.jpeg';
+      media.push({name, base64: task.beforeImage.split(',')[1]});
+      imageRels.push({rId:'rId2', mediaName:name});
+      shapes += shapeText(10,'lblAntes',600000,1150000,picW,300000,'ANTES', {size:1200,bold:true,color:'8B939A',font:'Oswald'});
+      shapes += shapePic(4,'antes','rId2',600000,picY,picW,picH);
+    }
+    if(task.afterImage){
+      const name = task.beforeImage ? 'image2.jpeg' : 'image1.jpeg';
+      const rId = task.beforeImage ? 'rId3' : 'rId2';
+      media.push({name, base64: task.afterImage.split(',')[1]});
+      imageRels.push({rId, mediaName:name});
+      const x2 = 6200000;
+      shapes += shapeText(11,'lblDepois',x2,1150000,picW,300000,'DEPOIS', {size:1200,bold:true,color:'8B939A',font:'Oswald'});
+      shapes += shapePic(5,'depois',rId,x2,picY,picW,picH);
+    }
+    pushSlide(shapes, imageRels);
+  }
+
+  zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Default Extension="jpeg" ContentType="image/jpeg"/>
+<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
+<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
+<Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
+<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+${slides.map((s,i)=>`<Override PartName="/ppt/slides/slide${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join('\n')}
+</Types>`);
+
+  zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`);
+
+  const nowIso = new Date().toISOString();
+  zip.file('docProps/core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<dc:title>${xmlEscape(task.title)}</dc:title>
+<dc:creator>Painel de Manutenção</dc:creator>
+<cp:lastModifiedBy>Painel de Manutenção</cp:lastModifiedBy>
+<dcterms:created xsi:type="dcterms:W3CDTF">${nowIso}</dcterms:created>
+<dcterms:modified xsi:type="dcterms:W3CDTF">${nowIso}</dcterms:modified>
+</cp:coreProperties>`);
+
+  zip.file('docProps/app.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+<Application>Painel de Manutencao</Application>
+<Slides>${slides.length}</Slides>
+</Properties>`);
+
+  zip.file('ppt/presentation.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>
+<p:sldIdLst>${slides.map((s,i)=>`<p:sldId id="${256+i}" r:id="rId${i+2}"/>`).join('')}</p:sldIdLst>
+<p:sldSz cx="${SLIDE_W}" cy="${SLIDE_H}"/>
+<p:notesSz cx="6858000" cy="9144000"/>
+</p:presentation>`);
+
+  zip.file('ppt/_rels/presentation.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+${slides.map((s,i)=>`<Relationship Id="rId${i+2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${i+1}.xml"/>`).join('\n')}
+</Relationships>`);
+
+  zip.file('ppt/theme/theme1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Manutencao">
+<a:themeElements>
+<a:clrScheme name="Manutencao">
+<a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>
+<a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>
+<a:dk2><a:srgbClr val="14171A"/></a:dk2>
+<a:lt2><a:srgbClr val="ECEEEF"/></a:lt2>
+<a:accent1><a:srgbClr val="F5A623"/></a:accent1>
+<a:accent2><a:srgbClr val="E5484D"/></a:accent2>
+<a:accent3><a:srgbClr val="4A9EDE"/></a:accent3>
+<a:accent4><a:srgbClr val="43B77A"/></a:accent4>
+<a:accent5><a:srgbClr val="5B6570"/></a:accent5>
+<a:accent6><a:srgbClr val="343B40"/></a:accent6>
+<a:hlink><a:srgbClr val="4A9EDE"/></a:hlink>
+<a:folHlink><a:srgbClr val="8B939A"/></a:folHlink>
+</a:clrScheme>
+<a:fontScheme name="Manutencao">
+<a:majorFont><a:latin typeface="Oswald"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>
+<a:minorFont><a:latin typeface="Inter"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont>
+</a:fontScheme>
+<a:fmtScheme name="Manutencao">
+<a:fillStyleLst><a:solidFill><a:schemeClr val="accent1"/></a:solidFill><a:solidFill><a:schemeClr val="accent1"/></a:solidFill><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:fillStyleLst>
+<a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:ln><a:ln w="6350"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:ln><a:ln w="6350"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:ln></a:lnStyleLst>
+<a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst>
+<a:bgFillStyleLst><a:solidFill><a:schemeClr val="lt1"/></a:solidFill><a:solidFill><a:schemeClr val="lt1"/></a:solidFill><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:bgFillStyleLst>
+</a:fmtScheme>
+</a:themeElements>
+</a:theme>`);
+
+  zip.file('ppt/slideMasters/slideMaster1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>
+<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>
+</p:spTree></p:cSld>
+<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>
+<p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst>
+</p:sldMaster>`);
+
+  zip.file('ppt/slideMasters/_rels/slideMaster1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
+</Relationships>`);
+
+  zip.file('ppt/slideLayouts/slideLayout1.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="blank" preserve="1">
+<p:cSld name="Blank"><p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>
+<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>
+</p:spTree></p:cSld>
+<p:clrMapOvr><a:overrideClrMapping bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:clrMapOvr>
+</p:sldLayout>`);
+
+  zip.file('ppt/slideLayouts/_rels/slideLayout1.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>
+</Relationships>`);
+
+  slides.forEach((s, i) => {
+    zip.file(`ppt/slides/slide${i+1}.xml`, s.xml);
+    let relXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>`;
+    s.imageRels.forEach(r => {
+      relXml += `\n<Relationship Id="${r.rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${r.mediaName}"/>`;
+    });
+    relXml += '\n</Relationships>';
+    zip.file(`ppt/slides/_rels/slide${i+1}.xml.rels`, relXml);
+  });
+
+  media.forEach(m => {
+    zip.file(`ppt/media/${m.name}`, m.base64, {base64:true});
+  });
+
+  return await zip.generateAsync({
+    type:'blob',
+    mimeType:'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  });
+}
+
+/* ==================== REPORT SEND FLOW ==================== */
+async function generateReport(docId){
+  const task = INDEX.find(t => t.docId === docId);
+  if(!task){ showToast('Erro', 'Solicitação não encontrada.'); return; }
+  const blob = await buildPptx(task);
+  const filename = `Relatorio_${task.id}.pptx`;
+  openSendModal(task, blob, filename);
+}
+
+function openSendModal(task, blob, filename){
+  const grid = $('#sendGrid');
+  const canShareFiles = !!(navigator.canShare && navigator.canShare({files:[new File([blob], filename, {type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'})]}));
+  
+  grid.innerHTML = `
+    <button class="send-btn" id="btnDownload">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Baixar arquivo (.pptx)
     </button>
+    ${canShareFiles ? `<button class="send-btn" id="btnShare">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      Compartilhar Arquivo
+    </button>` : ''}
+    <button class="send-btn" id="btnEmail">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" opacity="0"/><path d="M22 6l-10 7L2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+      Enviar por e-mail
+    </button>
+  `;
 
-    <!-- Modal: Nova Solicitação -->
-    <div class="modal fade" id="modalNovaSolicitacao" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-circle-plus text-primary me-2"></i>Nova Solicitação</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form id="formSolicitacao">
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label class="form-label fw-medium">Solicitante</label>
-                            <input type="text" id="fSolicitante" class="form-control" required placeholder="Seu nome">
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-medium">Linha / Equipamento</label>
-                                <input type="text" id="fLinha" class="form-control" required placeholder="Ex: Linha 02">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-medium">Turno Destino</label>
-                                <select id="fTurnoDestino" class="form-select" required>
-                                    <option value="1°turno">1° Turno</option>
-                                    <option value="2°turno">2° Turno</option>
-                                    <option value="3°turno">3° Turno</option>
-                                    <option value="Comercial">Comercial</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-medium">Descrição da Pendência</label>
-                            <textarea id="fDescricao" class="form-control" rows="3" required placeholder="Descreva o problema ou solicitação com detalhes..."></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-medium">Foto (Opcional)</label>
-                            <input type="file" id="fFoto" class="form-control" accept="image/*">
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary px-4" id="btnSalvar">Salvar</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+  $('#btnDownload').onclick = () => {
+    forceDownloadBlob(blob, filename);
+    showToast('Download iniciado', filename);
+  };
 
-    <!-- Modal: Detalhes e Alteração de Status -->
-    <div class="modal fade" id="modalDetalhes" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold">Detalhes da Pendência</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body" id="modalDetalhesBody">
-                    <!-- Preenchido via JS -->
-                </div>
-            </div>
-        </div>
-    </div>
+  if(canShareFiles){
+    $('#btnShare').onclick = async () => {
+      try{
+        const file = new File([blob], filename, {type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'});
+        await navigator.share({files:[file], title: 'Relatório de manutenção — ' + task.title});
+      }catch(err){ }
+    };
+  }
 
-    <!-- Modal: Visualizador de Imagem -->
-    <div class="modal fade" id="modalImage" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content bg-transparent border-0">
-                <div class="modal-body text-center p-0">
-                    <img id="modalImageSrc" src="" class="img-fluid rounded" alt="Imagem Expandida">
-                </div>
-            </div>
-        </div>
-    </div>
+  $('#btnEmail').onclick = () => {
+    forceDownloadBlob(blob, filename);
+    const subject = encodeURIComponent('Relatório de manutenção — ' + task.title);
+    const body = encodeURIComponent(`Segue relatório referente à solicitação ${task.id} - ${task.title}.\n\nO arquivo "${filename}" foi salvo no seu dispositivo.`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  $('#sendOverlay').classList.add('open');
+}
 
-    <!-- SDKs do Firebase SDK via CDN -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+/* ==================== CLOCK ==================== */
+function tickClock(){
+  $('#clock').textContent = new Date().toLocaleTimeString('pt-BR');
+}
+setInterval(tickClock, 1000); tickClock();
 
-        // CONFIGURAÇÃO DO SEU FIREBASE
-        const firebaseConfig = {
-            apiKey: "SUA_API_KEY",
-            authDomain: "SEU_PROJECT_ID.firebaseapp.com",
-            projectId: "SEU_PROJECT_ID",
-            storageBucket: "SEU_PROJECT_ID.appspot.com",
-            messagingSenderId: "SEU_SENDER_ID",
-            appId: "SEU_APP_ID"
-        };
-
-        // Inicializa o Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const colRef = collection(db, "solicitacoes");
-
-        let solicitacoesData = [];
-
-        // Utilitário para compactar fotos antes de salvar em Base64
-        function compressImage(file, maxW = 800, quality = 0.5) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = (e) => {
-                    const img = new Image();
-                    img.src = e.target.result;
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        let w = img.width;
-                        let h = img.height;
-
-                        if (w > maxW) {
-                            h = Math.round((h * maxW) / w);
-                            w = maxW;
-                        }
-
-                        canvas.width = w;
-                        canvas.height = h;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, w, h);
-                        resolve(canvas.toDataURL('image/jpeg', quality));
-                    };
-                    img.onerror = (err) => reject(err);
-                };
-                reader.onerror = (err) => reject(err);
-            });
-        }
-
-        // Listener em Tempo Real para renderizar os dados do Firestore
-        const q = query(colRef, orderBy("criadoEm", "desc"));
-        onSnapshot(q, (snapshot) => {
-            solicitacoesData = [];
-            snapshot.forEach((docSnap) => {
-                solicitacoesData.push({
-                    id: docSnap.id,
-                    ...docSnap.data()
-                });
-            });
-            renderCards();
-        });
-
-        // Renderiza os Cards
-        function renderCards() {
-            const container = document.getElementById('cardsContainer');
-            const searchVal = document.getElementById('searchInput').value.toLowerCase();
-            const filterStatus = document.getElementById('filterStatus').value;
-            const filterShift = document.getElementById('filterShift').value;
-
-            let filtered = solicitacoesData.filter(item => {
-                const textMatch = (item.descricao || '').toLowerCase().includes(searchVal) ||
-                                  (item.linha || '').toLowerCase().includes(searchVal) ||
-                                  (item.solicitante || '').toLowerCase().includes(searchVal);
-                
-                const statusMatch = filterStatus === 'todos' || item.status === filterStatus;
-                const shiftMatch = filterShift === 'todos' || item.turnoDestino === filterShift;
-
-                return textMatch && statusMatch && shiftMatch;
-            });
-
-            if (filtered.length === 0) {
-                container.innerHTML = `
-                    <div class="col-12 text-center py-5">
-                        <i class="fa-regular fa-folder-open text-muted fs-1 mb-2"></i>
-                        <p class="text-muted mb-0">Nenhuma pendência encontrada com esses filtros.</p>
-                    </div>`;
-                return;
-            }
-
-            container.innerHTML = filtered.map(item => {
-                const statusClass = `status-${(item.status || 'Pendente').toLowerCase().replace(' ', '_')}`;
-                
-                return `
-                    <div class="col-md-6 col-lg-4">
-                        <div class="task-card">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <span class="badge status-badge ${statusClass}">${item.status || 'Pendente'}</span>
-                                <small class="text-muted"><i class="fa-regular fa-clock me-1"></i>${item.turnoDestino || 'N/A'}</small>
-                            </div>
-                            <h6 class="fw-bold mb-1">${escapeHtml(item.linha)}</h6>
-                            <p class="text-muted small mb-2" style="white-space: pre-wrap;">${escapeHtml(item.descricao)}</p>
-                            
-                            ${item.fotoUrl ? `<img src="${item.fotoUrl}" class="img-preview-thumb img-expandable mb-2" data-img="${item.fotoUrl}">` : ''}
-
-                            <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
-                                <small class="text-muted">Por: <strong>${escapeHtml(item.solicitante)}</strong></small>
-                                <button class="btn btn-sm btn-outline-primary btn-detalhes" data-id="${item.id}">
-                                    Gerenciar <i class="fa-solid fa-chevron-right ms-1"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            // Listeners de clique nas imagens e botões de gerenciamento
-            document.querySelectorAll('.img-expandable').forEach(img => {
-                img.addEventListener('click', (e) => {
-                    document.getElementById('modalImageSrc').src = e.target.getAttribute('data-img');
-                    new bootstrap.Modal(document.getElementById('modalImage')).show();
-                });
-            });
-
-            document.querySelectorAll('.btn-detalhes').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const id = e.currentTarget.getAttribute('data-id');
-                    openDetailsModal(id);
-                });
-            });
-        }
-
-        // Modal de Detalhes / Alteração de Status
-        function openDetailsModal(id) {
-            const item = solicitacoesData.find(s => s.id === id);
-            if (!item) return;
-
-            const modalBody = document.getElementById('modalDetalhesBody');
-            modalBody.innerHTML = `
-                <div class="mb-3">
-                    <label class="form-label text-muted small fw-bold">SOLICITANTE / LINHA</label>
-                    <p class="mb-0 fw-semibold">${escapeHtml(item.solicitante)} - ${escapeHtml(item.linha)}</p>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label text-muted small fw-bold">DESCRIÇÃO</label>
-                    <p class="mb-0" style="white-space: pre-wrap;">${escapeHtml(item.descricao)}</p>
-                </div>
-                ${item.fotoUrl ? `<div class="mb-3"><img src="${item.fotoUrl}" class="img-fluid rounded"></div>` : ''}
-                <hr>
-                <div class="mb-3">
-                    <label for="updateStatus" class="form-label fw-bold">Alterar Status</label>
-                    <select id="updateStatus" class="form-select">
-                        <option value="Pendente" ${item.status === 'Pendente' ? 'selected' : ''}>Pendente</option>
-                        <option value="Em Andamento" ${item.status === 'Em Andamento' ? 'selected' : ''}>Em Andamento</option>
-                        <option value="Concluído" ${item.status === 'Concluído' ? 'selected' : ''}>Concluído</option>
-                        <option value="Cancelado" ${item.status === 'Cancelado' ? 'selected' : ''}>Cancelado</option>
-                    </select>
-                </div>
-                <div class="d-grid mt-4">
-                    <button class="btn btn-primary" id="btnSalvarStatus" data-id="${item.id}">Atualizar Status</button>
-                </div>
-            `;
-
-            const modal = new bootstrap.Modal(document.getElementById('modalDetalhes'));
-            modal.show();
-
-            document.getElementById('btnSalvarStatus').addEventListener('click', async (e) => {
-                const idDoc = e.currentTarget.getAttribute('data-id');
-                const newStatus = document.getElementById('updateStatus').value;
-
-                try {
-                    const docRef = doc(db, "solicitacoes", idDoc);
-                    await updateDoc(docRef, { status: newStatus });
-                    modal.hide();
-                } catch (error) {
-                    console.error("Erro ao atualizar status:", error);
-                    alert("Falha ao salvar a alteração.");
-                }
-            });
-        }
-
-        // Criar Nova Solicitação
-        document.getElementById('formSolicitacao').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btnSalvar = document.getElementById('btnSalvar');
-            btnSalvar.disabled = true;
-            btnSalvar.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Salvando...`;
-
-            try {
-                const fotoFile = document.getElementById('fFoto').files[0];
-                let fotoUrl = null;
-
-                if (fotoFile) {
-                    fotoUrl = await compressImage(fotoFile);
-                }
-
-                await addDoc(colRef, {
-                    solicitante: document.getElementById('fSolicitante').value,
-                    linha: document.getElementById('fLinha').value,
-                    turnoDestino: document.getElementById('fTurnoDestino').value,
-                    descricao: document.getElementById('fDescricao').value,
-                    fotoUrl: fotoUrl,
-                    status: 'Pendente',
-                    criadoEm: serverTimestamp()
-                });
-
-                document.getElementById('formSolicitacao').reset();
-                bootstrap.Modal.getInstance(document.getElementById('modalNovaSolicitacao')).hide();
-            } catch (err) {
-                console.error("Erro ao adicionar:", err);
-                alert("Erro ao enviar a solicitação.");
-            } finally {
-                btnSalvar.disabled = false;
-                btnSalvar.innerHTML = "Salvar";
-            }
-        });
-
-        // Eventos de Filtro e Pesquisa
-        document.getElementById('searchInput').addEventListener('input', renderCards);
-        document.getElementById('filterStatus').addEventListener('change', renderCards);
-        document.getElementById('filterShift').addEventListener('change', renderCards);
-        document.getElementById('myShift').addEventListener('change', (e) => {
-            document.getElementById('filterShift').value = e.target.value || 'todos';
-            renderCards();
-        });
-
-        document.getElementById('btnClearFilters').addEventListener('click', () => {
-            document.getElementById('searchInput').value = '';
-            document.getElementById('filterStatus').value = 'todos';
-            document.getElementById('filterShift').value = 'todos';
-            document.getElementById('myShift').value = '';
-            renderCards();
-        });
-
-        // Escapar código HTML para evitar XSS
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-        }
-    </script>
+/* ==================== INIT ==================== */
+(function init(){
+  let attempts = 0;
+  const checkFirebase = setInterval(() => {
+    attempts++;
+    if (window.db && window.fbMethods) {
+      clearInterval(checkFirebase);
+      listenToLiveUpdates(); 
+    } else if (attempts > 50) {
+      clearInterval(checkFirebase);
+      console.error("Falha ao inicializar o SDK do Firebase após 5 segundos.");
+    }
+  }, 100);
+})();
+</script>
 </body>
 </html>
