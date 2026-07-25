@@ -8,11 +8,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
-<!-- Firebase App & Serviços (Nuvem em Tempo Real) -->
+<!-- Firebase App & Firestore (Apenas banco de dados, sem Storage) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
   // SUAS CREDENCIAIS DO FIREBASE
   const firebaseConfig = {
@@ -27,12 +26,10 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-  const storage = getStorage(app);
 
-  // Expõe os módulos globalmente para o script do painel
+  // Expõe os módulos do Firestore globalmente
   window.db = db;
-  window.storageFB = storage;
-  window.fbMethods = { addDoc, doc, updateDoc, collection, onSnapshot, query, orderBy, ref, uploadBytes, getDownloadURL };
+  window.fbMethods = { addDoc, doc, updateDoc, collection, onSnapshot, query, orderBy };
 </script>
 
 <style>
@@ -422,7 +419,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
   </div>
 </div>
 
-<p class="foot-note">Os dados desta central são sincronizados em nuvem entre todos os turnos em tempo real. O envio por e-mail/WhatsApp faz o download do relatório PPT para que você possa anexá-lo diretamente no app correspondente.</p>
+<p class="foot-note">Os dados e fotos desta central são sincronizados diretamente via Firestore em tempo real. O envio por e-mail/WhatsApp faz o download do relatório PPT para anexá-lo diretamente no app desejado.</p>
 
 <!-- Modal: detalhes / imagem depois -->
 <div class="overlay" id="detailOverlay">
@@ -483,21 +480,8 @@ function showToast(title, msg){
   setTimeout(()=>{ box.style.opacity='0'; box.style.transition='opacity .3s'; setTimeout(()=>box.remove(),300); }, 6000);
 }
 
-/* Converte base64 dataURL em Blob puro (soluciona o travamento no Storage) */
-function dataURLtoBlob(dataurl) {
-  const arr = dataurl.split(',');
-  const mime = arr[0].match(/:(.*?);/)[1];
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while(n--){
-    u8arr[n] = bstr.charCodeAt(n);
-  }
-  return new Blob([u8arr], {type:mime});
-}
-
-/* compress an image file to a small JPEG dataURL */
-function compressImage(file, maxW=900, quality=0.72){
+/* Reduz bastante a imagem para caber de forma leve e rápida no Firestore */
+function compressImage(file, maxW=600, quality=0.6){
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Falha ao ler imagem'));
@@ -521,69 +505,23 @@ function compressImage(file, maxW=900, quality=0.72){
   });
 }
 
-/* Converte imagem da URL para Base64 caso precise em relatórios */
-async function urlToBase64(url) {
-  if (!url) return null;
-  if (url.startsWith('data:image')) return url;
-  try {
-    const response = await fetch(url);
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } catch(e) {
-    console.error("Erro ao converter URL da foto:", e);
-    return null;
-  }
-}
-
 /* ==================== STATE ==================== */
 let INDEX = []; 
 let currentBeforeImage = null;
 
-/* ==================== STORAGE LAYER (FIREBASE REALTIME) ==================== */
-
-async function uploadImageToCloud(base64Data, filename) {
-  if (!base64Data) return null;
-  try {
-    const { ref, uploadBytes, getDownloadURL } = window.fbMethods;
-    const blob = dataURLtoBlob(base64Data);
-    const storageRef = ref(window.storageFB, `manutencao/${Date.now()}_${filename}.jpg`);
-    await uploadBytes(storageRef, blob);
-    return await getDownloadURL(storageRef);
-  } catch(e) {
-    console.error("Erro no upload do Storage:", e);
-    throw e;
-  }
-}
+/* ==================== BANCO DE DADOS (FIRESTORE DIRETO) ==================== */
 
 async function saveTaskToCloud(taskData) {
   const { collection, addDoc } = window.fbMethods;
-  
-  let beforeUrl = null;
-  if (taskData.beforeImage) {
-    beforeUrl = await uploadImageToCloud(taskData.beforeImage, 'before');
-  }
-
   const payload = {
     ...taskData,
-    beforeImage: beforeUrl,
     createdAt: new Date().toISOString()
   };
-
   await addDoc(collection(window.db, "solicitacoes"), payload);
 }
 
 async function updateTaskInCloud(docId, updatePayload) {
   const { doc, updateDoc } = window.fbMethods;
-  
-  if (updatePayload.afterImage && updatePayload.afterImage.startsWith('data:image')) {
-    updatePayload.afterImage = await uploadImageToCloud(updatePayload.afterImage, 'after');
-  }
-
   const taskRef = doc(window.db, "solicitacoes", docId);
   await updateDoc(taskRef, updatePayload);
 }
@@ -613,7 +551,7 @@ function listenToLiveUpdates() {
   }, (error) => {
     $('#syncDot').style.background = 'var(--red)';
     $('#syncLabel').textContent = 'falha na conexão nuvem';
-    console.error("Erro na sincronização:", error);
+    console.error("Erro no Firestore:", error);
   });
 }
 
@@ -718,7 +656,7 @@ $('#beforeBox').addEventListener('click', e => { if(e.target.tagName!=='INPUT') 
 $('#beforeInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if(!file) return;
-  $('#beforeLabel').textContent = 'Processando imagem...';
+  $('#beforeLabel').textContent = 'Compactando foto...';
   try{
     currentBeforeImage = await compressImage(file);
     $('#beforePreview').src = currentBeforeImage;
@@ -732,7 +670,7 @@ $('#beforeInput').addEventListener('change', async (e) => {
 $('#taskForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const submitBtn = e.target.querySelector('button[type=submit]');
-  submitBtn.disabled = true; submitBtn.textContent = 'Enviando para nuvem...';
+  submitBtn.disabled = true; submitBtn.textContent = 'Gravando no Firestore...';
 
   const id = uid();
   const priority = $('#priorityGrid input[name=priority]:checked').value;
@@ -756,7 +694,7 @@ $('#taskForm').addEventListener('submit', async (e) => {
 
   try{
     await saveTaskToCloud(fullTask);
-    showToast('Solicitação gravada', `"${fullTask.title}" enviada com sucesso para a nuvem.`);
+    showToast('Solicitação gravada', `"${fullTask.title}" salva no Firestore com sucesso.`);
     e.target.reset();
     currentBeforeImage = null;
     $('#beforePreview').style.display='none';
@@ -764,7 +702,7 @@ $('#taskForm').addEventListener('submit', async (e) => {
     $$('#priorityGrid .priority-opt').forEach(o=>o.classList.remove('active'));
     $('#priorityGrid .priority-opt[data-p=alta]').classList.add('active');
   }catch(err){
-    showToast('Erro ao salvar', 'Não foi possível salvar na nuvem. Verifique sua conexão.');
+    showToast('Erro ao salvar', 'Não foi possível salvar no Firestore. Verifique as Regras no Console.');
     console.error(err);
   }finally{
     submitBtn.disabled = false; submitBtn.textContent = 'Registrar solicitação';
@@ -854,7 +792,7 @@ function openCompleteFlow(docId){
   $('#afterBox').addEventListener('click', e => { if(e.target.tagName!=='INPUT') $('#afterInput').click(); });
   $('#afterInput').addEventListener('change', async (e) => {
     const file = e.target.files[0]; if(!file) return;
-    $('#afterLabel').textContent = 'Processando...';
+    $('#afterLabel').textContent = 'Compactando...';
     afterImage = await compressImage(file);
     $('#afterPreview').src = afterImage; $('#afterPreview').style.display='block';
     $('#afterLabel').textContent = 'Imagem anexada — toque para trocar';
@@ -862,7 +800,7 @@ function openCompleteFlow(docId){
   $('#confirmComplete').addEventListener('click', async () => {
     const completedBy = $('#completeBy').value.trim() || $('#myShift').value;
     $('#confirmComplete').disabled = true;
-    $('#confirmComplete').textContent = 'Salvando na nuvem...';
+    $('#confirmComplete').textContent = 'Salvando no Firestore...';
     
     await updateTaskInCloud(docId, {
       status: 'concluida',
@@ -985,32 +923,29 @@ Aberto em: ${fmtDateTime(task.createdAt)}${task.completedAt ? '\nConcluído em: 
   shapes += shapeText(4,'desc',600000,1250000,10900000,5000000, task.description || '(sem descrição informada)', {size:1500,color:'1A1D21',font:'Inter'});
   pushSlide(shapes);
 
-  // Download e conversão das fotos caso existam URLs
-  const beforeB64 = task.beforeImage ? await urlToBase64(task.beforeImage) : null;
-  const afterB64 = task.afterImage ? await urlToBase64(task.afterImage) : null;
-
   // --- Slide 3: antes / depois (imagens) ---
-  if(beforeB64 || afterB64){
+  if(task.beforeImage || task.afterImage){
     shapes = '';
     shapes += shapeRect(2,'faixa',0,0,SLIDE_W,900000,'14171A');
     shapes += shapeText(3,'titulo',600000,260000,10000000,500000,'REGISTRO FOTOGRÁFICO', {size:1800,bold:true,color:'FFFFFF',font:'Oswald'});
     const imageRels = [];
     const picW = 5400000, picH = 4000000, picY = 1500000;
-    if(beforeB64){
+    
+    if(task.beforeImage){
       const name = 'image1.jpeg';
-      media.push({name, base64: beforeB64.split(',')[1]});
+      media.push({name, base64: task.beforeImage.split(',')[1]});
       imageRels.push({rId:'rId2', mediaName:name});
       shapes += shapeText(10,'lblAntes',600000,1150000,picW,300000,'ANTES', {size:1200,bold:true,color:'8B939A',font:'Oswald'});
       shapes += shapePic(4,'antes','rId2',600000,picY,picW,picH);
     }
-    if(afterB64){
-      const name = beforeB64 ? 'image2.jpeg' : 'image1.jpeg';
-      const rId = beforeB64 ? 'rId3' : 'rId2';
-      media.push({name, base64: afterB64.split(',')[1]});
+    if(task.afterImage){
+      const name = task.beforeImage ? 'image2.jpeg' : 'image1.jpeg';
+      const rId = task.beforeImage ? 'rId3' : 'rId2';
+      media.push({name, base64: task.afterImage.split(',')[1]});
       imageRels.push({rId, mediaName:name});
       const x2 = 6200000;
       shapes += shapeText(11,'lblDepois',x2,1150000,picW,300000,'DEPOIS', {size:1200,bold:true,color:'8B939A',font:'Oswald'});
-      shapes += shapePic(5,'depois',rId,x2,picY,picH);
+      shapes += shapePic(5,'depois',rId,x2,picY,picW,picH);
     }
     pushSlide(shapes, imageRels);
   }
