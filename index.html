@@ -277,7 +277,6 @@ button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-
 .modal-body{padding:18px;}
 .modal-body p{font-size:12.5px; color:var(--text-muted); line-height:1.6;}
 
-/* SEND MODAL GRID ADJUSTMENT */
 .send-grid{display:flex; flex-direction:column; gap:10px; margin-top:14px;}
 .send-btn{
   display:flex; align-items:center; justify-content:center; gap:10px; padding:14px 16px;
@@ -459,7 +458,7 @@ const PRIORITY_LABEL = {baixa:'Baixa', media:'Média', alta:'Alta', urgente:'Urg
 const STATUS_LABEL = {pendente:'Pendente', andamento:'Em andamento', concluida:'Concluída'};
 
 function uid(){ return 'OS-' + Date.now().toString(36).toUpperCase() + '-' + Math.floor(Math.random()*900+100); }
-function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }
 function timeAgo(iso){
   if(!iso) return '';
   const diff = (Date.now() - new Date(iso).getTime())/1000;
@@ -505,20 +504,17 @@ function compressImage(file, maxW=600, quality=0.6){
   });
 }
 
-/* FIX DEFINITIVO DE DOWNLOAD COMPATÍVEL COM CELULARES (ANDROID E IOS) */
-function forceDownloadBlob(blob, filename) {
-  const url = window.URL.createObjectURL(blob);
+/* FIX DEFINITIVO DE DOWNLOAD COMPATÍVEL COM CELULARES (BASE64 DATA-URL) */
+function triggerFileDownload(dataUrl, filename) {
   const a = document.createElement('a');
   a.style.display = 'none';
-  a.href = url;
+  a.href = dataUrl;
   a.download = filename;
-  a.target = '_blank';
   document.body.appendChild(a);
   a.click();
   setTimeout(() => {
     document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  }, 60000);
+  }, 1000);
 }
 
 /* ==================== STATE ==================== */
@@ -717,7 +713,7 @@ $('#taskForm').addEventListener('submit', async (e) => {
     $$('#priorityGrid .priority-opt').forEach(o=>o.classList.remove('active'));
     $('#priorityGrid .priority-opt[data-p=alta]').classList.add('active');
   }catch(err){
-    showToast('Erro ao salvar', 'Não foi possível salvar no Firestore. Verifique as Regras no Console.');
+    showToast('Erro ao salvar', 'Não foi possível salvar no Firestore.');
     console.error(err);
   }finally{
     submitBtn.disabled = false; submitBtn.textContent = 'Registrar solicitação';
@@ -902,7 +898,7 @@ ${shapesXml}
 </p:sld>`;
 }
 
-async function buildPptx(task){
+async function buildPptxDataUrl(task){
   const zip = new JSZip();
   const media = []; 
   let slideCount = 0;
@@ -1092,26 +1088,24 @@ ${slides.map((s,i)=>`<Relationship Id="rId${i+2}" Type="http://schemas.openxmlfo
     zip.file(`ppt/media/${m.name}`, m.base64, {base64:true});
   });
 
-  return await zip.generateAsync({
-    type:'blob',
-    mimeType:'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-  });
+  // Gera a saída diretamente como DataURL Base64
+  const base64 = await zip.generateAsync({ type: 'base64' });
+  return 'data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,' + base64;
 }
 
 /* ==================== REPORT SEND FLOW ==================== */
 async function generateReport(docId){
   const task = INDEX.find(t => t.docId === docId);
   if(!task){ showToast('Erro', 'Solicitação não encontrada.'); return; }
-  const blob = await buildPptx(task);
+  const dataUrl = await buildPptxDataUrl(task);
   const filename = `Relatorio_${task.id}.pptx`;
-  openSendModal(task, blob, filename);
+  openSendModal(task, dataUrl, filename);
 }
 
-function openSendModal(task, blob, filename){
+function openSendModal(task, dataUrl, filename){
   const grid = $('#sendGrid');
-  const canShareFiles = !!(navigator.canShare && navigator.canShare({files:[new File([blob], filename, {type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'})]}));
+  const canShareFiles = !!navigator.share;
   
-  // Renderizando opções do modal sem o botão do WhatsApp
   grid.innerHTML = `
     <button class="send-btn" id="btnDownload">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1128,23 +1122,28 @@ function openSendModal(task, blob, filename){
   `;
 
   $('#btnDownload').onclick = () => {
-    forceDownloadBlob(blob, filename);
+    triggerFileDownload(dataUrl, filename);
     showToast('Download iniciado', filename);
   };
 
   if(canShareFiles){
     $('#btnShare').onclick = async () => {
       try{
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
         const file = new File([blob], filename, {type:'application/vnd.openxmlformats-officedocument.presentationml.presentation'});
         await navigator.share({files:[file], title: 'Relatório de manutenção — ' + task.title});
-      }catch(err){ }
+      }catch(err){ 
+        // Fallback caso compartilhamento por arquivo falhe
+        triggerFileDownload(dataUrl, filename);
+      }
     };
   }
 
   $('#btnEmail').onclick = () => {
-    forceDownloadBlob(blob, filename);
+    triggerFileDownload(dataUrl, filename);
     const subject = encodeURIComponent('Relatório de manutenção — ' + task.title);
-    const body = encodeURIComponent(`Segue relatório referente à solicitação ${task.id} - ${task.title}.\n\nO arquivo "${filename}" foi salvo no seu dispositivo.`);
+    const body = encodeURIComponent(`Segue relatório referente à solicitação ${task.id} - ${task.title}.\n\nO arquivo "${filename}" foi baixado no seu dispositivo.`);
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
 
